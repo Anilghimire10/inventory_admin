@@ -40,32 +40,59 @@ const get = async <T>(url: string, params?: object) => (await api.get<T>(url, { 
 // ---- Types ----
 export interface AdminInfo { id: string; email: string; name: string }
 
+/** Mirrors SubscriptionStatus in the API (`api/src/common/subscription.ts`). */
+export type SubscriptionStatus = 'inactive' | 'expired' | 'trial' | 'expiring' | 'active';
+
+export const BUSINESS_TYPES = ['GROCERY', 'PHARMACY', 'RETAIL', 'OTHER'] as const;
+export type BusinessType = (typeof BUSINESS_TYPES)[number];
+
+export const SALES_MODELS = ['RETAIL', 'WHOLESALE'] as const;
+export type SalesModel = (typeof SALES_MODELS)[number];
+
+export const SUBSCRIPTION_FILTERS = [
+  'active', 'trial', 'expiring', 'expired', 'inactive', 'no-expiry',
+] as const;
+export type SubscriptionFilter = (typeof SUBSCRIPTION_FILTERS)[number];
+
+export const BUSINESS_SORTS = ['newest', 'oldest', 'name', 'sales', 'expiry'] as const;
+export type BusinessSort = (typeof BUSINESS_SORTS)[number];
+
 export interface PlatformStats {
   businesses: number;
   activeBusinesses: number;
   suspendedBusinesses: number;
   users: number;
   products: number;
+  /** Adds every currency together — show salesByCurrency instead. */
   totalSalesValue: number;
   totalTransactions: number;
+  salesByCurrency: { currency: string; total: number; count: number }[];
+  subscriptions: { trial: number; expiringSoon: number; expired: number; inactive: number };
   recentBusinesses: { id: string; name: string; type: string; createdAt: string }[];
 }
 
 export interface BusinessRow {
   id: string;
   name: string;
-  type: string;
+  type: BusinessType;
   currency: string;
   isSuspended: boolean;
+  suspendedReason?: string | null;
   isSubscribed: boolean;
   subscribedTo?: string | null;
+  subscriptionStatus: SubscriptionStatus;
   createdAt: string;
-  _count: { users: number; products: number; sales: number; stores: number };
+  _count: { users: number; products: number; sales: number; stores: number; subscriptionPayments: number };
 }
 
 export interface BusinessDetail extends BusinessRow {
+  salesModel: SalesModel;
   taxId?: string | null;
-  _count: { users: number; products: number; sales: number; stores: number; customers: number };
+  suspendedAt?: string | null;
+  _count: {
+    users: number; products: number; sales: number; stores: number;
+    customers: number; subscriptionPayments: number;
+  };
   stores: { id: string; name: string; isActive: boolean }[];
   users: {
     id: string;
@@ -73,11 +100,20 @@ export interface BusinessDetail extends BusinessRow {
     email: string;
     role: string;
     isActive: boolean;
+    emailVerified: boolean;
     createdAt: string;
   }[];
   totalSalesValue: number;
   totalTransactions: number;
   recentSales: { id: string; receiptNo: string; total: string; status: string; createdAt: string }[];
+}
+
+export interface UpdateBusinessInput {
+  name?: string;
+  type?: BusinessType;
+  salesModel?: SalesModel;
+  currency?: string;
+  taxId?: string;
 }
 
 export interface Paginated<T> {
@@ -110,10 +146,12 @@ export interface AdminSaleRow {
 export interface AdminSaleItem {
   id: string;
   name: string;
-  quantity: number;
+  /** Decimal, sent as a string (e.g. "1.000"). */
+  quantity: string;
   unitPrice: string;
   lineTotal: string;
-  returnedQty: number;
+  /** Decimal, sent as a string. */
+  returnedQty: string;
 }
 
 export interface AdminSaleDetail extends AdminSaleRow {
@@ -145,8 +183,10 @@ export const AdminApi = {
   stats: () => get<PlatformStats>('/admin/stats'),
   businesses: (params?: object) => get<Paginated<BusinessRow>>('/admin/businesses', params),
   business: (id: string) => get<BusinessDetail>(`/admin/businesses/${id}`),
-  setSuspended: async (id: string, isSuspended: boolean) =>
-    (await api.patch(`/admin/businesses/${id}/suspend`, { isSuspended })).data,
+  updateBusiness: async (id: string, dto: UpdateBusinessInput) =>
+    (await api.patch<BusinessDetail>(`/admin/businesses/${id}`, dto)).data,
+  setSuspended: async (id: string, isSuspended: boolean, reason?: string) =>
+    (await api.patch(`/admin/businesses/${id}/suspend`, { isSuspended, ...(reason ? { reason } : {}) })).data,
   setSubscription: async (id: string, isSubscribed: boolean, subscribedTo: string | null) =>
     (await api.patch(`/admin/businesses/${id}/subscription`, { isSubscribed, subscribedTo })).data,
   customers: (id: string, params?: object) =>

@@ -1,10 +1,14 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, Moon, Sun } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
-import { Button, Input } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
+import { Field } from '@/components/ui/label';
 import { apiError } from '@/lib/api';
+import { useTheme } from '@/theme/ThemeProvider';
 
 export default function LoginPage() {
   const { admin, login } = useAuth();
@@ -33,29 +37,116 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <ShieldCheck className="h-6 w-6" />
+    <AdminAuthShell>
+      <h1 className="text-xl font-semibold">Super Admin Sign In</h1>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">
+        Access platform management, tenants, and system-wide telemetry.
+      </p>
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Admin Email">
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="admin@platform.com"
+            autoComplete="email"
+            required
+            autoFocus
+          />
+        </Field>
+        <Field label="Password">
+          <PasswordInput
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="current-password"
+            required
+          />
+        </Field>
+        {error && (
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
           </div>
-          <div>
-            <h1 className="text-lg font-semibold">Super Admin</h1>
-            <p className="text-sm text-muted-foreground">Platform administration</p>
+        )}
+        <Button type="submit" className="w-full" loading={loading}>
+          Sign in to Admin Console
+        </Button>
+      </form>
+    </AdminAuthShell>
+  );
+}
+
+function AdminAuthShell({ children }: { children: React.ReactNode }) {
+  const { theme, toggle } = useTheme();
+  const features = [
+    'Multi-tenant business control & live onboarding',
+    'Subscription status, trial tracking & instant freeze/reactivation',
+    'System-wide audit trail and real-time operational feeds',
+  ];
+
+  return (
+    <div className="grid min-h-screen lg:grid-cols-2">
+      {/* Brand panel — matches frontend brand panel */}
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-primary p-10 text-primary-foreground lg:flex">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_45%)]" />
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-foreground/15">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <span className="text-lg font-semibold">Inventory Admin</span>
+          </div>
+          <button
+            onClick={toggle}
+            className="rounded-lg bg-primary-foreground/10 p-2 text-primary-foreground hover:bg-primary-foreground/20"
+            aria-label="Toggle theme"
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
+        </div>
+        <div className="relative">
+          <h2 className="max-w-sm text-3xl font-semibold leading-tight tracking-tight">
+            Centralized platform control.
+          </h2>
+          <p className="mt-3 max-w-sm text-sm text-primary-foreground/85">
+            Monitor tenant metrics, manage licenses, inspect audits, and support all business instances across your network.
+          </p>
+          <ul className="mt-8 space-y-3">
+            {features.map((f) => (
+              <li key={f} className="flex items-center gap-3 text-sm">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary-foreground/90" />
+                <span className="text-primary-foreground/90">{f}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="relative text-xs text-primary-foreground/70">
+          © {new Date().getFullYear()} Inventory Manager · Super Admin
+        </p>
+      </div>
+
+      {/* Form panel */}
+      <div className="flex items-center justify-center bg-muted/30 p-4 sm:p-6">
+        <div className="w-full max-w-sm">
+          <div className="mb-6 flex items-center justify-between lg:hidden">
+            <div className="flex items-center gap-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <span className="text-lg font-semibold">Inventory Admin</span>
+            </div>
+            <button
+              onClick={toggle}
+              className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
+            {children}
           </div>
         </div>
-        <form onSubmit={submit} className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">Email</label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">Password</label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" className="w-full" loading={loading}>Sign in</Button>
-        </form>
       </div>
     </div>
   );
