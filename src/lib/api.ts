@@ -2,10 +2,14 @@ import axios, { AxiosError } from 'axios';
 
 const TOKEN_KEY = 'admin_token';
 
+// sessionStorage, not localStorage: the token must stay scoped to one tab.
+// localStorage is shared by every tab of the same origin, so two platform
+// admins signed in from two tabs on the same machine would overwrite each
+// other's token and both end up as whoever logged in last on refresh.
 export const getToken = () =>
-  typeof window === 'undefined' ? null : localStorage.getItem(TOKEN_KEY);
-export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+  typeof window === 'undefined' ? null : sessionStorage.getItem(TOKEN_KEY);
+export const setToken = (t: string) => sessionStorage.setItem(TOKEN_KEY, t);
+export const clearToken = () => sessionStorage.removeItem(TOKEN_KEY);
 
 export const api = axios.create({ baseURL: '/api' });
 
