@@ -24,6 +24,10 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401 && getToken()) {
       clearToken();
+      // Same hard navigation as logout, and for the same reason: the session
+      // is gone, so the cache built under it must go too rather than be
+      // carried into the next sign-in.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       if (!location.pathname.startsWith('/login')) location.href = '/login';
     }
     return Promise.reject(error);

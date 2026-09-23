@@ -38,6 +38,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     clearToken();
     setAdmin(null);
+    // A full page load, deliberately, not router.push(): signing out has to
+    // drop every piece of in-memory state with it -- the React Query cache
+    // still holds this admin's businesses, users and audit rows. A soft
+    // navigation would leave all of that sitting in memory for whoever signs
+    // in next on the same tab.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     location.href = '/login';
   };
 
