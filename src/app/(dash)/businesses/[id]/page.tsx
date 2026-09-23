@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Ban, CheckCircle2, Pencil, Calendar, Store, Users, ShoppingCart, UserCheck } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCircle2, Pencil, Store, Users, ShoppingCart } from 'lucide-react';
 import {
   AdminApi,
   AdminSaleRow,
@@ -15,7 +15,7 @@ import {
   type UpdateBusinessInput,
 } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { SubscriptionBadge } from '@/components/ui';
 import { Dialog, DialogFooter } from '@/components/ui/dialog';
