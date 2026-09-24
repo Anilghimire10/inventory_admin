@@ -17,6 +17,7 @@ import {
 import { AdminApi } from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Spinner, ErrorState, PageHeader } from '@/components/ui/misc';
+import { Tooltip } from '@/components/ui/tooltip';
 import { formatMoney, formatDate, cn } from '@/lib/utils';
 
 export default function OverviewPage() {
@@ -118,6 +119,7 @@ export default function OverviewPage() {
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
               <StatCard
                 label="Active Tenants"
+                hint="Every business that isn't suspended, whatever its subscription state."
                 value={String(data.activeBusinesses)}
                 sub="Operational"
                 icon={CheckCircle2}
@@ -126,6 +128,7 @@ export default function OverviewPage() {
               />
               <StatCard
                 label="Suspended"
+                hint="Access locked by a platform admin until the business is reactivated."
                 value={String(data.suspendedBusinesses)}
                 sub="Access locked"
                 icon={Ban}
@@ -134,6 +137,7 @@ export default function OverviewPage() {
               />
               <StatCard
                 label="On Trial"
+                hint="Subscribed with the end date still ahead and no payment recorded yet."
                 value={String(data.subscriptions.trial)}
                 sub="Free trial period"
                 icon={Hourglass}
@@ -142,6 +146,7 @@ export default function OverviewPage() {
               />
               <StatCard
                 label="Expiring Soon"
+                hint="Has paid before, and the paid-until date falls within the next 7 days."
                 value={String(data.subscriptions.expiringSoon)}
                 sub="Next 7 days"
                 icon={Clock}
@@ -150,6 +155,7 @@ export default function OverviewPage() {
               />
               <StatCard
                 label="Expired"
+                hint="The paid-until or trial end date has passed."
                 value={String(data.subscriptions.expired)}
                 sub="Overdue renewal"
                 icon={AlertTriangle}
@@ -158,6 +164,7 @@ export default function OverviewPage() {
               />
               <StatCard
                 label="No Subscription"
+                hint="The subscription is switched off for this business."
                 value={String(data.subscriptions.inactive)}
                 sub="Inactive license"
                 icon={Ban}
@@ -210,6 +217,7 @@ export default function OverviewPage() {
 
 function StatCard({
   label,
+  hint,
   value,
   sub,
   icon: Icon,
@@ -217,6 +225,8 @@ function StatCard({
   href,
 }: {
   label: string;
+  /** Exact definition, on hover. The card itself is the trigger: it is a link. */
+  hint?: string;
   value: string;
   sub?: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -246,5 +256,12 @@ function StatCard({
     </Card>
   );
 
-  return href ? <Link href={href}>{content}</Link> : content;
+  const card = href ? <Link href={href}>{content}</Link> : content;
+  return hint ? (
+    <Tooltip content={hint} className="flex flex-col">
+      {card}
+    </Tooltip>
+  ) : (
+    card
+  );
 }

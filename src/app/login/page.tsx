@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Field } from '@/components/ui/label';
+import { Tooltip } from '@/components/ui/tooltip';
 import { apiError } from '@/lib/api';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -96,13 +97,15 @@ function AdminAuthShell({ children }: { children: React.ReactNode }) {
             </div>
             <span className="text-lg font-semibold">Inventory Admin</span>
           </div>
-          <button
-            onClick={toggle}
-            className="rounded-lg bg-primary-foreground/10 p-2 text-primary-foreground hover:bg-primary-foreground/20"
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
+          <Tooltip content={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <button
+              onClick={toggle}
+              className="rounded-lg bg-primary-foreground/10 p-2 text-primary-foreground hover:bg-primary-foreground/20"
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </Tooltip>
         </div>
         <div className="relative">
           <h2 className="max-w-sm text-3xl font-semibold leading-tight tracking-tight">
@@ -135,13 +138,15 @@ function AdminAuthShell({ children }: { children: React.ReactNode }) {
               </div>
               <span className="text-lg font-semibold">Inventory Admin</span>
             </div>
-            <button
-              onClick={toggle}
-              className="rounded-md p-2 text-muted-foreground hover:bg-accent"
-              aria-label="Toggle theme"
-            >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
+            <Tooltip content={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+              <button
+                onClick={toggle}
+                className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+                aria-label="Toggle theme"
+              >
+                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+            </Tooltip>
           </div>
           <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
             {children}

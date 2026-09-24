@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { Spinner } from '@/components/ui/misc';
+import { Tooltip } from '@/components/ui/tooltip';
 import { useTheme } from '@/theme/ThemeProvider';
 import { cn } from '@/lib/utils';
 
@@ -128,13 +129,15 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
 
           <div className="ml-auto flex items-center gap-2">
             {/* Theme Toggle */}
-            <button
-              onClick={toggle}
-              className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              aria-label="Toggle theme"
-            >
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </button>
+            <Tooltip content={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+              <button
+                onClick={toggle}
+                className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                aria-label="Toggle theme"
+              >
+                {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </button>
+            </Tooltip>
 
             {/* Admin Avatar Dropdown */}
             <div className="relative">

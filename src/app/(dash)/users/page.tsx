@@ -14,6 +14,7 @@ import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
 import { Spinner, ErrorState, PageHeader, EmptyState, Alert } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
+import { Tooltip } from '@/components/ui/tooltip';
 import { formatDate } from '@/lib/utils';
 
 type Pending = { user: TenantUser; action: 'verify' | 'resend' | 'reset' };
@@ -217,17 +218,18 @@ function IconButton({
   disabled?: boolean;
 }) {
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="h-8 w-8 p-0"
-    >
-      <Icon className="h-4 w-4" />
-    </Button>
+    <Tooltip content={label}>
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label={label}
+        disabled={disabled}
+        onClick={onClick}
+        className="h-8 w-8 p-0"
+      >
+        <Icon className="h-4 w-4" />
+      </Button>
+    </Tooltip>
   );
 }
 
