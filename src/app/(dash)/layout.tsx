@@ -13,6 +13,9 @@ import {
   Menu,
   X,
   ChevronDown,
+  Users,
+  History,
+  UserCog,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { Spinner } from '@/components/ui/misc';
@@ -22,7 +25,10 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/businesses', label: 'Businesses', icon: Building2 },
+  { href: '/users', label: 'Users', icon: Users },
   { href: '/activity', label: 'Activity Log', icon: ScrollText },
+  { href: '/admins', label: 'Admins', icon: ShieldCheck },
+  { href: '/admin-log', label: 'Admin Log', icon: History },
 ];
 
 export default function DashLayout({ children }: { children: React.ReactNode }) {
@@ -156,6 +162,13 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
                     <p className="font-medium text-foreground truncate">{admin.email}</p>
                     <p className="text-muted-foreground text-[11px] mt-0.5">Super Administrator</p>
                   </div>
+                  <Link
+                    href="/account"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors"
+                  >
+                    <UserCog className="h-4 w-4" /> Change password
+                  </Link>
                   <button
                     onClick={logout}
                     className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-accent transition-colors"

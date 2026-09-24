@@ -28,8 +28,9 @@ import { Pagination } from '@/components/ui/pagination';
 import { Spinner, ErrorState, Alert, EmptyState } from '@/components/ui/misc';
 import { formatMoney, formatDate, formatDateTime, cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
+import { PaymentsTab, SubscriptionActions } from './payments';
 
-type Tab = 'overview' | 'customers' | 'sales' | 'activity';
+type Tab = 'overview' | 'payments' | 'customers' | 'sales' | 'activity';
 
 export default function BusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -154,7 +155,7 @@ export default function BusinessDetailPage() {
 
       {/* Tabs navigation */}
       <div className="flex gap-2 border-b border-border">
-        {(['overview', 'customers', 'sales', 'activity'] as Tab[]).map((t) => (
+        {(['overview', 'payments', 'customers', 'sales', 'activity'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -181,6 +182,9 @@ export default function BusinessDetailPage() {
                 <p className="text-xs text-muted-foreground mt-0.5">Manage expiration dates and active license states</p>
               </CardHeader>
               <SubscriptionControl
+                // Remounted when the end date changes (a payment extends it),
+                // so the date field shows the new figure rather than the old.
+                key={data.subscribedTo ?? 'none'}
                 isSubscribed={data.isSubscribed}
                 subscribedTo={data.subscribedTo ?? null}
                 pending={subscription.isPending}
@@ -189,6 +193,7 @@ export default function BusinessDetailPage() {
                   subscription.mutate({ isSubscribed, subscribedTo })
                 }
               />
+              <SubscriptionActions business={data} onChanged={invalidate} />
             </Card>
 
             {/* Staff list */}
@@ -246,6 +251,7 @@ export default function BusinessDetailPage() {
           </div>
         )}
 
+        {tab === 'payments' && <PaymentsTab id={id} />}
         {tab === 'customers' && <CustomersTab id={id} money={money} />}
         {tab === 'sales' && <SalesTab id={id} money={money} />}
         {tab === 'activity' && <ActivityTab id={id} />}

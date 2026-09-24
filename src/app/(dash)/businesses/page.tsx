@@ -2,7 +2,7 @@
 import { Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, Building2, X } from 'lucide-react';
+import { Search, Building2, X, Plus } from 'lucide-react';
 import {
   AdminApi,
   BUSINESS_SORTS,
@@ -21,6 +21,7 @@ import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
 import { Spinner, ErrorState, PageHeader, EmptyState } from '@/components/ui/misc';
 import { formatDate } from '@/lib/utils';
+import { CreateBusinessDialog } from './create-business';
 
 const SUBSCRIPTION_LABELS: Record<SubscriptionFilter, string> = {
   active: 'Active',
@@ -62,6 +63,7 @@ function BusinessesList() {
   const [type, setType] = useState<'' | BusinessType>('');
   const [sort, setSort] = useState<BusinessSort>('newest');
   const [page, setPage] = useState(1);
+  const [creating, setCreating] = useState(false);
 
   const onFilter = <T,>(set: (v: T) => void) => (v: T) => {
     set(v);
@@ -98,7 +100,13 @@ function BusinessesList() {
       <PageHeader
         title="Businesses"
         description="All registered tenant stores, billing status, and metric counters."
+        action={
+          <Button className="gap-1.5" onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> New business
+          </Button>
+        }
       />
+      {creating && <CreateBusinessDialog onClose={() => setCreating(false)} />}
 
       {/* Filter and search toolbar */}
       <div className="my-5 flex flex-wrap items-center gap-3">

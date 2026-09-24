@@ -184,6 +184,88 @@ export interface AdminActivity {
   business?: { id: string; name: string } | null;
 }
 
+/** Mirrors SubscriptionPaymentMethod in the API schema. */
+export const SUBSCRIPTION_PAYMENT_METHODS = ['CASH', 'BANK', 'ESEWA', 'KHALTI', 'OTHER'] as const;
+export type SubscriptionPaymentMethod = (typeof SUBSCRIPTION_PAYMENT_METHODS)[number];
+
+/** Money a shop paid for its subscription, recorded by hand in this panel. */
+export interface SubscriptionPayment {
+  id: string;
+  /** Decimal, sent as a string. */
+  amount: string;
+  currency: string;
+  method: SubscriptionPaymentMethod;
+  reference?: string | null;
+  periodFrom: string;
+  periodTo: string;
+  note?: string | null;
+  createdAt: string;
+  recordedByAdmin?: { id: string; name: string } | null;
+}
+
+/** Give `months` or `periodTo`, not both. */
+export interface RecordPaymentInput {
+  amount: number;
+  method: SubscriptionPaymentMethod;
+  currency?: string;
+  reference?: string;
+  months?: number;
+  periodFrom?: string;
+  periodTo?: string;
+  note?: string;
+}
+
+/** A shop user, as the support tools see them: across every business. */
+export interface TenantUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  emailVerified: boolean;
+  createdAt: string;
+  business: { id: string; name: string; isSuspended: boolean };
+  store?: { id: string; name: string } | null;
+}
+
+export interface PlatformAdmin {
+  id: string;
+  email: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+/** What a platform admin did. Separate from a shop's own activity log. */
+export interface AdminAuditEntry {
+  id: string;
+  action: string;
+  /** Snapshot, so the entry outlives the admin account. */
+  adminEmail: string;
+  admin?: { id: string; name: string; email: string } | null;
+  business?: { id: string; name: string } | null;
+  targetUserId?: string | null;
+  details?: Record<string, unknown> | null;
+  ip?: string | null;
+  createdAt: string;
+}
+
+export interface CreateBusinessInput {
+  businessName: string;
+  type?: BusinessType;
+  salesModel?: SalesModel;
+  currency?: string;
+  ownerName: string;
+  ownerEmail: string;
+  /** Omit to email the owner an invite instead. */
+  password?: string;
+  /** Paid-until date. Omitted, the business starts on the standard trial. */
+  subscribedTo?: string;
+}
+
+const post = async <T>(url: string, body?: object) => (await api.post<T>(url, body)).data;
+const patch = async <T>(url: string, body?: object) => (await api.patch<T>(url, body)).data;
+
 export const AdminApi = {
   login: async (email: string, password: string) =>
     (await api.post<{ accessToken: string; admin: AdminInfo }>('/admin/auth/login', { email, password })).data,
@@ -197,6 +279,23 @@ export const AdminApi = {
     (await api.patch(`/admin/businesses/${id}/suspend`, { isSuspended, ...(reason ? { reason } : {}) })).data,
   setSubscription: async (id: string, isSubscribed: boolean, subscribedTo: string | null) =>
     (await api.patch(`/admin/businesses/${id}/subscription`, { isSubscribed, subscribedTo })).data,
+  payments: (id: string, params?: object) =>
+    get<Paginated<SubscriptionPayment>>(`/admin/businesses/${id}/payments`, params),
+  /** Records the payment and extends the paid-until date in one step. */
+  recordPayment: async (id: string, dto: RecordPaymentInput) =>
+    (
+      await api.post<{ payment: SubscriptionPayment; business: { subscribedTo: string | null } }>(
+        `/admin/businesses/${id}/payments`,
+        dto,
+      )
+    ).data,
+  /** Emails the owners and posts a bell notification about the end date now. */
+  sendReminder: async (id: string) =>
+    (
+      await api.post<{ daysLeft: number; emailed: number; failed: number }>(
+        `/admin/businesses/${id}/send-reminder`,
+      )
+    ).data,
   customers: (id: string, params?: object) =>
     get<Paginated<AdminCustomer>>(`/admin/businesses/${id}/customers`, params),
   sales: (id: string, params?: object) =>
@@ -205,6 +304,38 @@ export const AdminApi = {
     get<AdminSaleDetail>(`/admin/businesses/${id}/sales/${saleId}`),
   activity: (id: string, params?: object) =>
     get<Paginated<AdminActivity>>(`/admin/businesses/${id}/activity`, params),
+
+  createBusiness: (dto: CreateBusinessInput) =>
+    post<{ business: { id: string; name: string }; owner: { id: string; email: string }; inviteSent: boolean }>(
+      '/admin/businesses',
+      dto,
+    ),
+
+  // ---- This admin ----
+  /** Returns a fresh token; every token issued before the change stops working. */
+  changePassword: (currentPassword: string, newPassword: string) =>
+    post<{ message: string; accessToken: string }>('/admin/auth/change-password', {
+      currentPassword,
+      newPassword,
+    }),
+
+  // ---- Admin accounts and their log ----
+  admins: () => get<PlatformAdmin[]>('/admin/admins'),
+  createAdmin: (dto: { email: string; name: string; password: string }) =>
+    post<PlatformAdmin>('/admin/admins', dto),
+  updateAdmin: (id: string, dto: { name?: string; isActive?: boolean; password?: string }) =>
+    patch<PlatformAdmin>(`/admin/admins/${id}`, dto),
+  auditLog: (params?: object) => get<Paginated<AdminAuditEntry>>('/admin/audit-log', params),
+
+  // ---- Shop users (support) ----
+  users: (params?: object) => get<Paginated<TenantUser>>('/admin/users', params),
+  updateUser: (id: string, dto: { name?: string; email?: string; isActive?: boolean }) =>
+    patch<TenantUser>(`/admin/users/${id}`, dto),
+  verifyUserEmail: (id: string) => post<TenantUser>(`/admin/users/${id}/verify-email`),
+  resendVerification: (id: string) =>
+    post<{ message: string }>(`/admin/users/${id}/resend-verification`),
+  sendPasswordReset: (id: string) =>
+    post<{ message: string }>(`/admin/users/${id}/send-password-reset`),
 
   // Global activity feed across all businesses
   activityFeed: (params?: object) => get<Paginated<AdminActivity>>('/admin/activity', params),

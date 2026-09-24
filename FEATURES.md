@@ -65,39 +65,42 @@ yet.** Section 3 has no backend yet.
 
 ## 1. Fix what's already there (small)
 
-- [ ] **1.1 Platform sales total mixes currencies** `[API+UI]`
+*Checked 2026-09-23: all of section 1 is built in the panel; the boxes had not
+been ticked.*
+
+- [x] **1.1 Platform sales total mixes currencies** `[API+UI]`
   - **Problem:** the overview adds sales from NPR and USD businesses together and
     shows the result as USD.
   - **Fix:** return totals grouped by `Business.currency` (a raw SQL join, since
     Prisma can't group sales by a business field) and show one figure per
     currency.
   - **Where:** `api/src/platform/platform.service.ts` → `stats()`, `admin/src/app/(dash)/page.tsx`.
-- [ ] **1.2 Error states** `[UI]`
+- [x] **1.2 Error states** `[UI]`
   - **Problem:** every page renders `isLoading || !data ? <Spinner />`, so a failed
     request spins forever.
   - **Fix:** show an error message with a Retry button.
-- [ ] **1.3 Mobile navigation** `[UI]`
+- [x] **1.3 Mobile navigation** `[UI]`
   - **Problem:** the sidebar is hidden below `lg`, and the mobile header only has
     "Sign out" (`src/app/(dash)/layout.tsx`), so on a phone you can't reach
     Businesses or Activity.
-- [ ] **1.4 Businesses list: columns, filters, sorting** `[API+UI]`
+- [x] **1.4 Businesses list: columns, filters, sorting** `[API+UI]`
   - **Columns to add:** subscription status (Trial / Active / Expiring / Expired)
     and the paid-until date.
   - **Filters:** active or suspended; subscription active, expiring within 7 days,
     expired or no expiry; business type.
   - **Sorting:** newest, name, most sales, expiry date.
   - **API:** add these query parameters to `GET /admin/businesses`.
-- [ ] **1.5 Edit the business profile, including type** `[API+UI]`
+- [x] **1.5 Edit the business profile, including type** `[API+UI]`
   - The comment in `api/src/business/business.controller.ts` says only a
     super-admin can change the business type, but nothing implements it.
   - **Endpoint:** `PATCH /admin/businesses/:id` with `{ name, type, salesModel, currency, taxId }`.
-- [ ] **1.6 Suspension reason** `[API+UI]`
+- [x] **1.6 Suspension reason** `[API+UI]`
   - **Schema:** add `Business.suspendedReason` and `Business.suspendedAt`.
   - **Panel:** require a reason when suspending, and show it on the business page.
   - **Shop side:** add the reason to the error message the shop's users see at login.
-- [ ] **1.7 Replace `alert()` / `confirm()` with dialogs** `[UI]`
+- [x] **1.7 Replace `alert()` / `confirm()` with dialogs** `[UI]`
   - `Modal` already exists in `src/components/ui.tsx`.
-- [ ] **1.8 Sale detail quantities** `[UI]`
+- [x] **1.8 Sale detail quantities** `[UI]`
   - `quantity` and `returnedQty` arrive as decimal strings (e.g. `"1.000"`), but
     `src/lib/api.ts` types them as `number`.
   - Type them as `string` and `Number()` them before comparing or displaying.
@@ -108,13 +111,19 @@ yet.** Section 3 has no backend yet.
 
 ### 2A. Subscriptions, handled manually
 
-- [ ] **2A.1 Automatic trial on signup** `[API+UI]`
+*2026-09-23: 2A.2 and 2A.4 UI built -- a Payments tab, a Record payment dialog
+(with +1 / +3 / +12 month buttons and a warning when a no-expiry business would
+get an end date), and Send reminder now. 2A.3 is covered without its own page:
+the overview's Trial / Expiring / Expired cards link into the business list
+filtered that way, which is what the API settled on (no separate endpoint).*
+
+- [x] **2A.1 Automatic trial on signup** `[API+UI]`
   - **Problem:** today every signup is free forever. The schema defaults are
     `isSubscribed = true` and `subscribedTo = null`.
   - **Fix:** on register (`api/src/auth/auth.service.ts` → `register()`), set
     `subscribedTo = now + TRIAL_DAYS`, with `TRIAL_DAYS` from env and a default of 14.
   - **Panel:** a business with no recorded payment shows a **Trial** badge.
-- [ ] **2A.2 Record a payment** `[API+UI]`
+- [x] **2A.2 Record a payment** `[API+UI]`
   - **New table: `SubscriptionPayment`**
 
     | Field                    | Notes                                |
@@ -135,14 +144,14 @@ yet.** Section 3 has no backend yet.
     - a "Record payment" dialog, with quick +1 / +3 / +12 month buttons;
     - a **Payments** tab on the business page.
 
-- [ ] **2A.3 Renewals page** `[API+UI]`
+- [x] **2A.3 Renewals page** `[API+UI]`
   - A new sidebar page listing:
     - businesses expiring within N days;
     - expired businesses;
     - trials ending.
   - **Endpoint:** `GET /admin/subscriptions?status=expiring|expired|trial&days=7`.
   - **Overview:** add cards for "Expiring this week" and "Expired".
-- [ ] **2A.4 Renewal reminder emails** `[API+UI]`
+- [x] **2A.4 Renewal reminder emails** `[API+UI]`
   - A daily cron emails active OWNERs 7, 3 and 1 days before expiry and on the
     expiry day. It also posts a notification in the shop's bell
     (`NotificationsService.create` already exists but nothing calls it).
@@ -151,16 +160,24 @@ yet.** Section 3 has no backend yet.
 
 ### 2B. Admin accounts and security
 
-- [ ] **2B.1 Change own password** `[API+UI]`
+*2026-09-23: sections 2B and 2C are built in the panel -- Account (change
+password, swaps in the fresh token), Admins (create, rename, deactivate, set a
+password), Admin Log (filter by action and admin), Users (search, edit,
+verify, resend code, send reset) and New business on the Businesses page.
+`GET /admin/auth/me` now returns `id` like login does; it returned `adminId`, so
+`admin.id` was undefined after every page reload. 2B.4 is API-only and was
+already done.*
+
+- [x] **2B.1 Change own password** `[API+UI]`
   - There's no endpoint today, and the seeded login is still `admin12345`.
   - **Endpoint:** `POST /admin/auth/change-password`.
   - **UI:** a "My account" page.
-- [ ] **2B.2 Manage admin accounts** `[API+UI]`
+- [x] **2B.2 Manage admin accounts** `[API+UI]`
   - List, create, deactivate and reset password.
   - The `PlatformAdmin.isActive` field exists, but nothing uses it.
   - **Endpoints:** `GET/POST /admin/admins`, `PATCH /admin/admins/:id`.
   - **Guard:** an admin can't deactivate themselves or the last active admin.
-- [ ] **2B.3 Admin action log** `[API+UI]`
+- [x] **2B.3 Admin action log** `[API+UI]`
   - **Problem:** admin actions are recorded nowhere. `AuditLog` requires a
     `businessId` and only covers shop users.
   - **New table: `PlatformAuditLog`**
@@ -178,26 +195,26 @@ yet.** Section 3 has no backend yet.
     user resets and verifications, business create/edit/delete, and impersonation.
   - **UI:** an "Admin log" page.
 
-- [ ] **2B.4 Small hardening** `[API]`
+- [x] **2B.4 Small hardening** `[API]`
   - Normalise the email on admin login (`platform-auth.service.ts`).
   - Give admin sessions a shorter lifetime than shop users, e.g. 12 hours instead of 7 days.
 
 ### 2C. Support tools for shops
 
-- [ ] **2C.1 Global user search** `[API+UI]`
+- [x] **2C.1 Global user search** `[API+UI]`
   - Find any user by email or name across all businesses, then jump to their
     business. This is the first step for "I can't log in" tickets.
   - **Endpoint:** `GET /admin/users?search=`.
-- [ ] **2C.2 Verify email or resend the code** `[API+UI]`
+- [x] **2C.2 Verify email or resend the code** `[API+UI]`
   - Signup requires email verification, so any email outage blocks every new shop.
   - **Endpoints:** `POST /admin/users/:id/verify-email`, `POST /admin/users/:id/resend-verification`.
-- [ ] **2C.3 Reset a shop user's password** `[API+UI]`
+- [x] **2C.3 Reset a shop user's password** `[API+UI]`
   - Send the normal reset email by reusing the forgot-password flow.
   - **Endpoint:** `POST /admin/users/:id/send-password-reset`.
-- [ ] **2C.4 Activate or deactivate a shop user; fix a mistyped email** `[API+UI]`
+- [x] **2C.4 Activate or deactivate a shop user; fix a mistyped email** `[API+UI]`
   - **Endpoint:** `PATCH /admin/users/:id` with `{ isActive, email }`.
   - The email must stay unique.
-- [ ] **2C.5 Create a business from the panel** `[API+UI]`
+- [x] **2C.5 Create a business from the panel** `[API+UI]`
   - For shops onboarded in person.
   - **Endpoint:** `POST /admin/businesses` with `{ businessName, type, currency, ownerName, ownerEmail, subscribedTo? }`.
   - **It creates:** the business, a "Main Store", and a verified OWNER account.
