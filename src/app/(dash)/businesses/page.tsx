@@ -20,8 +20,10 @@ import { SubscriptionBadge } from '@/components/ui';
 import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
 import { Spinner, ErrorState, PageHeader, EmptyState } from '@/components/ui/misc';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime, formatRelative } from '@/lib/utils';
+import { Tooltip } from '@/components/ui/tooltip';
 import { CreateBusinessDialog } from './create-business';
+import { useCanEdit } from '@/auth/AuthProvider';
 
 const SUBSCRIPTION_LABELS: Record<SubscriptionFilter, string> = {
   active: 'Active',
@@ -49,6 +51,7 @@ export default function BusinessesPage() {
 }
 
 function BusinessesList() {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const params = useSearchParams();
   const [search, setSearch] = useState('');
@@ -101,9 +104,11 @@ function BusinessesList() {
         title="Businesses"
         description="All registered tenant stores, billing status, and metric counters."
         action={
-          <Button className="gap-1.5" onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> New business
-          </Button>
+          canEdit && (
+            <Button className="gap-1.5" onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" /> New business
+            </Button>
+          )
         }
       />
       {creating && <CreateBusinessDialog onClose={() => setCreating(false)} />}
@@ -203,6 +208,7 @@ function BusinessesList() {
                 <TH>Status</TH>
                 <TH>Subscription</TH>
                 <TH>Paid until</TH>
+                <TH>Last active</TH>
                 <TH>Joined</TH>
               </tr>
             </THead>
@@ -230,6 +236,15 @@ function BusinessesList() {
                   </TD>
                   <TD className="whitespace-nowrap text-muted-foreground">
                     {b.subscribedTo ? formatDate(b.subscribedTo) : 'No expiry'}
+                  </TD>
+                  <TD className="whitespace-nowrap text-muted-foreground">
+                    {b.lastActiveAt ? (
+                      <Tooltip content={`Last sign-in or sale: ${formatDateTime(b.lastActiveAt)}`}>
+                        <span>{formatRelative(b.lastActiveAt)}</span>
+                      </Tooltip>
+                    ) : (
+                      'Never'
+                    )}
                   </TD>
                   <TD className="whitespace-nowrap text-muted-foreground">
                     {formatDate(b.createdAt)}

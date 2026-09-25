@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Field } from '@/components/ui/label';
 import { Tooltip } from '@/components/ui/tooltip';
-import { apiError } from '@/lib/api';
+import { apiError, apiErrorCode } from '@/lib/api';
 import { useTheme } from '@/theme/ThemeProvider';
 
 export default function LoginPage() {
@@ -17,6 +17,10 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  // Shown once the API says this account has two-factor on (after the
+  // password has checked out), and kept for retries.
+  const [needCode, setNeedCode] = useState(false);
+  const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -28,9 +32,15 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, needCode ? code : undefined);
       router.replace('/');
     } catch (err) {
+      const reason = apiErrorCode(err);
+      if (reason === 'TOTP_REQUIRED') {
+        setNeedCode(true);
+        return;
+      }
+      if (reason === 'TOTP_INVALID' || reason === 'TOTP_LOCKED') setCode('');
       setError(apiError(err));
     } finally {
       setLoading(false);
@@ -64,6 +74,23 @@ export default function LoginPage() {
             required
           />
         </Field>
+        {needCode && (
+          <Field label="Authenticator code">
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^\d\s]/g, ''))}
+              placeholder="123 456"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={7}
+              autoFocus
+              required
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              The 6-digit code from your authenticator app. Lost your phone? Ask another admin to reset it.
+            </p>
+          </Field>
+        )}
         {error && (
           <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             {error}

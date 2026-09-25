@@ -9,8 +9,9 @@ import { Field } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
 import { PageHeader, Alert } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
+import { TwoFactorCard } from './two-factor';
 
-/** This admin's own account: change the password. */
+/** This admin's own account: password and two-factor sign-in. */
 export default function AccountPage() {
   const { admin } = useAuth();
   const { show: toast } = useToast();
@@ -35,7 +36,7 @@ export default function AccountPage() {
   const mismatch = confirm.length > 0 && next !== confirm;
 
   return (
-    <div className="max-w-lg">
+    <div className="max-w-lg space-y-6">
       <PageHeader title="Account" description={admin ? `${admin.name} · ${admin.email}` : undefined} />
 
       <Card className="p-5">
@@ -85,6 +86,8 @@ export default function AccountPage() {
           </Button>
         </form>
       </Card>
+
+      <TwoFactorCard />
     </div>
   );
 }

@@ -36,7 +36,7 @@ yet.** Section 3 has no backend yet.
 | 2A.1 Trial | automatic on register (`TRIAL_DAYS`, default 14) |
 | 2A.2 Payments | `POST /admin/businesses/:id/payments` `{ amount, method, months \| periodTo, periodFrom?, currency?, reference?, note? }`; `GET` the same path for history |
 | 2A.3 Renewals | no separate endpoint: use `GET /admin/businesses?subscription=expiring&days=7&sort=expiry` (and `=expired`, `=trial`) |
-| 2A.4 Reminders | runs daily at 09:00 server time (7/3/1/0 days before the end date); `POST /admin/businesses/:id/send-reminder` sends one now |
+| 2A.4 Reminders | runs daily at 09:00 in each shop's own time zone (7/3/1/0 days before the end date); `POST /admin/businesses/:id/send-reminder` sends one now |
 | 2B.1 Change password | `POST /admin/auth/change-password` `{ currentPassword, newPassword }`. Returns a new `accessToken`; older tokens stop working |
 | 2B.2 Admin accounts | `GET` / `POST /admin/admins`, `PATCH /admin/admins/:id` `{ name?, isActive?, password? }` |
 | 2B.3 Admin log | `GET /admin/audit-log?search=&adminId=&businessId=` |
@@ -224,45 +224,86 @@ already done.*
 
 ## 3. Next (after the must-haves)
 
-- [ ] **3.1 "View as owner" (impersonation)** `[API+UI]`
+*2026-09-24: all of section 3 is built. Four new migrations, applied in order
+by `prisma migrate deploy`, all additive: `business_notes`, `email_log`,
+`admin_totp` (plus 3.12's grace period, which needs none). New API env:
+`SHOP_APP_URL` (required in production for 3.1) and optional
+`TOTP_ENCRYPTION_KEY` (3.9).*
+
+- [x] **3.1 "View as owner" (impersonation)** `[API+UI]`
   - `POST /admin/businesses/:id/impersonate` returns a short-lived (30 minute),
     **read-only** shop token that carries an `impersonatedBy` claim.
   - The shop app shows a banner while it's in use.
   - It's written to the admin action log (2B.3).
-- [ ] **3.2 Growth dashboard** `[API+UI]`
+  - *Done: read-only is enforced by the API (a global guard refuses every
+    non-GET), not by hiding buttons. The token travels in the URL's #fragment,
+    and the shop app strips it from the address bar before loading. The
+    session ends early if the admin who opened it is deactivated. Refused
+    while the business is suspended or its subscription has lapsed.*
+- [x] **3.2 Growth dashboard** `[API+UI]`
   - Signups per week, active businesses (a sale in the last 7 days), at-risk
     businesses (no sale in 14 days).
   - Payments collected this month, from `SubscriptionPayment`.
-- [ ] **3.3 "Last active" per business** `[API+UI]`
+  - *Done: a Growth page. "At risk" means a shop that has sold before but not
+    in 14 days, and isn't suspended; it lists them, quietest first. Income is
+    shown per currency, this month against last.*
+- [x] **3.3 "Last active" per business** `[API+UI]`
   - The last login (the `auth.login` entry in `AuditLog`) or the last sale.
   - Shown as a column in the businesses list.
-- [ ] **3.4 More read-only business tabs** `[API+UI]`
+  - *Done: whichever is later, so a shop that stays signed in on one till
+    still counts as active. Also on the business page.*
+- [x] **3.4 More read-only business tabs** `[API+UI]`
   - Products and stock, purchases and suppliers, shifts.
-- [ ] **3.5 Internal notes on a business** `[API+UI]`
+  - *Done: Products (on hand across all stores), Purchases (with what's still
+    owed) and Shifts (expected, counted, variance). Each view is written to the
+    admin log, like the customers tab.*
+- [x] **3.5 Internal notes on a business** `[API+UI]`
   - A `BusinessNote` table: `businessId`, `adminId`, `body`, `createdAt`.
   - For calls, payment promises, setup details.
-- [ ] **3.6 Announcements** `[API+UI]`
+  - *Done: a Notes tab. Adding and deleting a note is logged.*
+- [x] **3.6 Announcements** `[API+UI]`
   - Send a notification to all or selected businesses, which appears in the shop's bell.
   - Optionally email the owners as well.
-- [ ] **3.7 Email log** `[API+UI]`
+  - *Done: an Announcements page. Suspended shops are skipped. No table of its
+    own: each send is an admin log entry, which is also the history.*
+- [x] **3.7 Email log** `[API+UI]`
   - `MailService` writes an `EmailLog` row for each email: `to`, `type`, `status`,
     `error`, `businessId?`, `createdAt`.
   - An admin page, searchable by email address.
   - This answers "I never got my code".
-- [ ] **3.8 System status page** `[API+UI]`
+  - *Done. The body isn't stored, since it holds one-time codes. Status is
+    Sent, Failed (with Resend's reply) or Logged only (`MAIL_TRANSPORT=log`).*
+- [x] **3.8 System status page** `[API+UI]`
   - API and database up, Resend configured, when each cron last ran, and the
     deployed version or commit.
-- [ ] **3.9 Two-factor login for admins (TOTP)** `[API+UI]`
+  - *Done: also the latest migration, where product images are stored, and the
+    trial, grace and support-contact settings. Settings show as set or not set,
+    never their values. Cron runs are tracked in memory, so they reset when the
+    server restarts.*
+- [x] **3.9 Two-factor login for admins (TOTP)** `[API+UI]`
   - An admin account can see every shop's data.
-- [ ] **3.10 Export a business's data** `[API+UI]`
+  - *Done: opt-in from the Account page (QR code, or type the key), confirmed
+    with a code before it takes effect. The code is asked for only after the
+    password is right, and a code can't be used twice. Secrets are encrypted
+    at rest. Lost phone: another admin turns it off from the Admins page.*
+- [x] **3.10 Export a business's data** `[API+UI]`
   - Reuse `BusinessService.exportData()`.
-- [ ] **3.11 Delete a business** `[API+UI]`
+  - *Done: the same NDJSON export the owner gets, downloaded from the
+    business page. Logged.*
+- [x] **3.11 Delete a business** `[API+UI]`
   - For test or spam signups and deletion requests.
-  - Require typing the business name to confirm; the database schema already
-    deletes its data along with it.
+  - Require typing the business name to confirm. ~~The database schema already
+    deletes its data along with it.~~ *It doesn't: six foreign keys are
+    RESTRICT, and a plain delete fails on the first business with a purchase.
+    The API deletes those rows first, in one transaction.*
   - Recorded in the admin action log.
-- [ ] **3.12 Grace period** `[API]`
+  - *Done: logged with the name and the counts of what was removed.*
+- [x] **3.12 Grace period** `[API]`
   - N days after expiry before the shop is locked out.
+  - *2026-09-24: `SUBSCRIPTION_GRACE_DAYS`, default 3 (0 locks out on the end
+    date). The end date doesn't move, so the panel still labels the business
+    Expired and a payment still renews from it. The end-date reminder now says
+    when access actually stops.*
 
 ---
 
@@ -289,11 +330,21 @@ already done.*
 
 These go with the subscription features but live in the other apps:
 
-- **web: an expired-subscription screen.** Today an expired shop gets a 401 and is
+- [x] **web: an expired-subscription screen.** Today an expired shop gets a 401 and is
   thrown back to login with "Your subscription is inactive". Show a proper
   screen instead: how to renew, and who to contact.
-- **web: a trial banner,** e.g. "Trial: 5 days left".
-- **api: trial on register (2A.1) and the reminder cron (2A.4).**
+  - *2026-09-24: the lock-out 401 now carries `code: SUBSCRIPTION_INACTIVE`, the
+    end date and a contact. Signing in, or the next request once grace runs
+    out, lands on `/subscription-expired`. It's still a 401, so older app
+    builds behave as before.*
+- [x] **web: a trial banner,** e.g. "Trial: 5 days left".
+  - *2026-09-24: `GET /auth/me` returns `subscription { status, endsAt,
+    accessEndsAt, daysLeft, contact }` to owners and managers. The banner covers
+    trial, ending within 7 days (both dismissible for the session) and the grace
+    period (not dismissible).*
+- [x] **api: trial on register (2A.1) and the reminder cron (2A.4).**
+- **Contact details** for the expired screen, the banner and reminder emails come
+  from the API's `SUPPORT_EMAIL` / `SUPPORT_PHONE`. Unset, they say "Contact us".
 
 ---
 
@@ -306,6 +357,7 @@ These go with the subscription features but live in the other apps:
 | New `PlatformAuditLog` table                       | 2B.3, 3.1, 3.11 |
 | New `BusinessNote` table                           | 3.5             |
 | New `EmailLog` table                               | 3.7             |
+| `PlatformAdmin.totpSecret`, `totpEnabledAt`, `totpLastStep` | 3.9    |
 
 ---
 

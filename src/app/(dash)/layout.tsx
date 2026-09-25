@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Building2,
@@ -16,20 +17,33 @@ import {
   Users,
   History,
   UserCog,
+  TrendingUp,
+  Mail,
+  Activity,
+  Megaphone,
+  LifeBuoy,
+  Settings,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { Spinner } from '@/components/ui/misc';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useTheme } from '@/theme/ThemeProvider';
 import { cn } from '@/lib/utils';
+import { AdminApi } from '@/lib/api';
 
 const NAV = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/growth', label: 'Growth', icon: TrendingUp },
   { href: '/businesses', label: 'Businesses', icon: Building2 },
   { href: '/users', label: 'Users', icon: Users },
+  { href: '/support', label: 'Support', icon: LifeBuoy },
+  { href: '/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/activity', label: 'Activity Log', icon: ScrollText },
   { href: '/admins', label: 'Admins', icon: ShieldCheck },
   { href: '/admin-log', label: 'Admin Log', icon: History },
+  { href: '/email-log', label: 'Email Log', icon: Mail },
+  { href: '/system', label: 'System', icon: Activity },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function DashLayout({ children }: { children: React.ReactNode }) {
@@ -39,6 +53,14 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname() ?? '';
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Open tickets, for the badge on Support. Polled, since shops write in.
+  const openTickets = useQuery({
+    queryKey: ['admin-support', 'open-count'],
+    queryFn: () => AdminApi.tickets({ status: 'OPEN', limit: 1 }),
+    enabled: !!admin,
+    refetchInterval: 60_000,
+    select: (d) => d.openCount,
+  });
 
   useEffect(() => {
     if (!loading && !admin) router.replace('/login');
@@ -73,7 +95,7 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
             <span className="text-[11px] text-muted-foreground">Platform Console</span>
           </div>
           <button
-            className="ml-auto lg:hidden rounded-md p-1 hover:bg-accent"
+            className="ml-auto lg:hidden rounded-md p-2.5 hover:bg-accent"
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu"
           >
@@ -101,6 +123,14 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
+                {item.href === '/support' && !!openTickets.data && (
+                  <span
+                    className="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground"
+                    aria-label={`${openTickets.data} open`}
+                  >
+                    {openTickets.data}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -120,7 +150,7 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
         {/* Sticky Header matching inventory_frontend */}
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur lg:px-6">
           <button
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-accent lg:hidden"
+            className="rounded-md p-2.5 text-muted-foreground hover:bg-accent lg:hidden"
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
           >
@@ -154,7 +184,9 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
                 </div>
                 <div className="hidden text-left sm:block">
                   <div className="text-sm font-medium leading-tight">{admin.email}</div>
-                  <div className="text-xs text-muted-foreground">Platform Admin</div>
+                  <div className="text-xs text-muted-foreground">
+                    {admin.role === 'SUPPORT' ? 'Support (read-only)' : 'Platform Admin'}
+                  </div>
                 </div>
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               </button>
@@ -163,7 +195,9 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
                 <div className="absolute right-0 mt-1 w-52 rounded-md border border-border bg-popover p-1 shadow-lg animate-fade-in">
                   <div className="px-3 py-2 text-xs border-b border-border mb-1">
                     <p className="font-medium text-foreground truncate">{admin.email}</p>
-                    <p className="text-muted-foreground text-[11px] mt-0.5">Super Administrator</p>
+                    <p className="text-muted-foreground text-[11px] mt-0.5">
+                      {admin.role === 'SUPPORT' ? 'Support (read-only)' : 'Super Administrator'}
+                    </p>
                   </div>
                   <Link
                     href="/account"

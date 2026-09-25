@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Ban, CheckCircle2, Pencil, Store, Users, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCircle2, Eye, Pencil, Store, Users, ShoppingCart } from 'lucide-react';
 import {
   AdminApi,
   AdminSaleRow,
@@ -26,21 +26,47 @@ import { Select } from '@/components/ui/select';
 import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
 import { Spinner, ErrorState, Alert, EmptyState } from '@/components/ui/misc';
-import { formatMoney, formatDate, formatDateTime, cn } from '@/lib/utils';
+import { formatMoney, formatDate, formatDateTime, formatRelative, cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
+import { useCanEdit } from '@/auth/AuthProvider';
 import { PaymentsTab, SubscriptionActions } from './payments';
+import { NotesTab } from './notes';
+import { ProductsTab, PurchasesTab, ShiftsTab } from './more-tabs';
+import { DataControls } from './data-controls';
 
-type Tab = 'overview' | 'payments' | 'customers' | 'sales' | 'activity';
+type Tab =
+  | 'overview'
+  | 'payments'
+  | 'customers'
+  | 'sales'
+  | 'products'
+  | 'purchases'
+  | 'shifts'
+  | 'activity'
+  | 'notes';
 
 export default function BusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
   const { show: toast } = useToast();
+  const canEdit = useCanEdit();
   const [tab, setTab] = useState<Tab>('overview');
   const [confirmSuspend, setConfirmSuspend] = useState<'suspend' | 'reactivate' | null>(null);
   const [reason, setReason] = useState('');
   const [editing, setEditing] = useState(false);
+  const [viewingAs, setViewingAs] = useState(false);
+
+  const impersonate = useMutation({
+    mutationFn: async (tab: Window | null) => ({ tab, res: await AdminApi.impersonate(id) }),
+    onSuccess: ({ tab, res }) => {
+      setViewingAs(false);
+      if (tab) tab.location.replace(res.url);
+      else window.open(res.url, '_blank', 'noopener');
+      toast(`Opened as ${res.owner.name}. Read-only until ${formatDateTime(res.expiresAt)}.`, 'success');
+    },
+    onError: (_e, tab) => tab?.close(),
+  });
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['admin-business', id],
@@ -104,32 +130,41 @@ export default function BusinessDetailPage() {
           </div>
           <p className="mt-1.5 text-sm text-muted-foreground">
             <span className="capitalize">{data.type}</span> · <span className="capitalize">{data.salesModel}</span> · {data.currency}
-            {data.taxId ? ` · PAN ${data.taxId}` : ''} · Joined {formatDate(data.createdAt)}
+            {data.taxId ? ` · PAN ${data.taxId}` : ''} · Joined {formatDate(data.createdAt)} · Last active{' '}
+            {data.lastActiveAt ? formatRelative(data.lastActiveAt).toLowerCase() : 'never'}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="gap-1.5">
-            <Pencil className="h-3.5 w-3.5" /> Edit details
+        {/* Wraps on a phone: three buttons don't fit beside each other at 360px. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setViewingAs(true)} className="gap-1.5">
+            <Eye className="h-3.5 w-3.5" /> View as owner
           </Button>
-          {data.isSuspended ? (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setConfirmSuspend('reactivate')}
-              className="gap-1.5"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" /> Reactivate
-            </Button>
-          ) : (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setConfirmSuspend('suspend')}
-              className="gap-1.5"
-            >
-              <Ban className="h-3.5 w-3.5" /> Suspend
-            </Button>
+          {canEdit && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="gap-1.5">
+                <Pencil className="h-3.5 w-3.5" /> Edit details
+              </Button>
+              {data.isSuspended ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setConfirmSuspend('reactivate')}
+                  className="gap-1.5"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Reactivate
+                </Button>
+              ) : (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setConfirmSuspend('suspend')}
+                  className="gap-1.5"
+                >
+                  <Ban className="h-3.5 w-3.5" /> Suspend
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -154,8 +189,8 @@ export default function BusinessDetailPage() {
       </div>
 
       {/* Tabs navigation */}
-      <div className="flex gap-2 border-b border-border">
-        {(['overview', 'payments', 'customers', 'sales', 'activity'] as Tab[]).map((t) => (
+      <div className="flex gap-2 overflow-x-auto border-b border-border">
+        {(['overview', 'payments', 'customers', 'sales', 'products', 'purchases', 'shifts', 'activity', 'notes'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -181,19 +216,27 @@ export default function BusinessDetailPage() {
                 <CardTitle className="text-base font-semibold">License & Subscription Control</CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">Manage expiration dates and active license states</p>
               </CardHeader>
-              <SubscriptionControl
-                // Remounted when the end date changes (a payment extends it),
-                // so the date field shows the new figure rather than the old.
-                key={data.subscribedTo ?? 'none'}
-                isSubscribed={data.isSubscribed}
-                subscribedTo={data.subscribedTo ?? null}
-                pending={subscription.isPending}
-                error={subscription.error}
-                onSave={(isSubscribed, subscribedTo) =>
-                  subscription.mutate({ isSubscribed, subscribedTo })
-                }
-              />
-              <SubscriptionActions business={data} onChanged={invalidate} />
+              {canEdit && (
+                <SubscriptionControl
+                  // Remounted when the end date changes (a payment extends it),
+                  // so the date field shows the new figure rather than the old.
+                  key={data.subscribedTo ?? 'none'}
+                  isSubscribed={data.isSubscribed}
+                  subscribedTo={data.subscribedTo ?? null}
+                  pending={subscription.isPending}
+                  error={subscription.error}
+                  onSave={(isSubscribed, subscribedTo) =>
+                    subscription.mutate({ isSubscribed, subscribedTo })
+                  }
+                />
+              )}
+              {canEdit ? (
+                <SubscriptionActions business={data} onChanged={invalidate} />
+              ) : (
+                <p className="px-5 py-4 text-sm text-muted-foreground">
+                  {data.subscribedTo ? `Paid until ${formatDate(data.subscribedTo)}.` : 'No end date.'} Only a full admin can change it.
+                </p>
+              )}
             </Card>
 
             {/* Staff list */}
@@ -248,13 +291,19 @@ export default function BusinessDetailPage() {
                 )}
               </div>
             </Card>
+
+            <DataControls business={data} />
           </div>
         )}
 
         {tab === 'payments' && <PaymentsTab id={id} />}
         {tab === 'customers' && <CustomersTab id={id} money={money} />}
         {tab === 'sales' && <SalesTab id={id} money={money} />}
+        {tab === 'products' && <ProductsTab id={id} money={money} />}
+        {tab === 'purchases' && <PurchasesTab id={id} money={money} />}
+        {tab === 'shifts' && <ShiftsTab id={id} money={money} />}
         {tab === 'activity' && <ActivityTab id={id} />}
+        {tab === 'notes' && <NotesTab id={id} />}
       </div>
 
       {/* Edit Business Modal */}
@@ -266,6 +315,30 @@ export default function BusinessDetailPage() {
             invalidate();
             setEditing(false);
             toast('Business details updated', 'success');
+          }}
+        />
+      )}
+
+      {viewingAs && (
+        <ConfirmDialog
+          open
+          title={`View ${data.name} as its owner?`}
+          description="Opens the shop app in a new tab, signed in as the owner for 30 minutes. It is read-only: nothing can be changed. The session is recorded in the admin log."
+          confirmLabel="Open read-only view"
+          destructive={false}
+          loading={impersonate.isPending}
+          error={impersonate.error ? <Alert>{apiError(impersonate.error)}</Alert> : null}
+          onConfirm={() => {
+            // Opened now, on the click, or the browser treats it as a popup.
+            // Cut off from this page: the shop app has no business reaching
+            // back into the admin panel.
+            const tab = window.open('about:blank', '_blank');
+            if (tab) tab.opener = null;
+            impersonate.mutate(tab);
+          }}
+          onCancel={() => {
+            setViewingAs(false);
+            impersonate.reset();
           }}
         />
       )}

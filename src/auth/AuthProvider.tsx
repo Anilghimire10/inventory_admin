@@ -5,12 +5,18 @@ import { AdminApi, type AdminInfo, clearToken, getToken, setToken } from '@/lib/
 interface AuthState {
   admin: AdminInfo | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, code?: string) => Promise<void>;
   logout: () => void;
 }
 
 const Ctx = createContext<AuthState>(null as never);
 export const useAuth = () => useContext(Ctx);
+
+/**
+ * Whether the signed-in admin may change things. SUPPORT accounts are
+ * read-only (the API refuses their writes); this only hides the buttons.
+ */
+export const useCanEdit = () => useContext(Ctx).admin?.role !== 'SUPPORT';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [admin, setAdmin] = useState<AdminInfo | null>(null);
@@ -29,8 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const res = await AdminApi.login(email, password);
+  const login = async (email: string, password: string, code?: string) => {
+    const res = await AdminApi.login(email, password, code);
     setToken(res.accessToken);
     setAdmin(res.admin);
   };

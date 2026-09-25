@@ -21,6 +21,19 @@ export function formatDate(value: string | Date | null | undefined) {
   });
 }
 
+/** "today", "yesterday", "5 days ago", "3 months ago" -- or "Never". */
+export function formatRelative(value: string | Date | null | undefined) {
+  if (!value) return 'Never';
+  const days = Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return months === 1 ? '1 month ago' : `${months} months ago`;
+  const years = Math.floor(days / 365);
+  return years <= 1 ? '1 year ago' : `${years} years ago`;
+}
+
 export function formatDateTime(value: string | Date | null | undefined) {
   if (!value) return '—';
   return new Date(value).toLocaleString(undefined, {

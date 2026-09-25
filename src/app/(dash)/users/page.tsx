@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, Users, Pencil, MailCheck, Send, KeyRound } from 'lucide-react';
 import { AdminApi, apiError, type TenantUser } from '@/lib/api';
+import { useCanEdit } from '@/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -42,6 +43,7 @@ const CONFIRM_COPY: Record<Pending['action'], { title: string; body: string; lab
  * or name, then fix whatever is stopping them signing in.
  */
 export default function UsersPage() {
+  const canEdit = useCanEdit();
   const qc = useQueryClient();
   const { show: toast } = useToast();
   const [search, setSearch] = useState('');
@@ -141,30 +143,32 @@ export default function UsersPage() {
                   </TD>
                   <TD className="whitespace-nowrap text-muted-foreground">{formatDate(u.createdAt)}</TD>
                   <TD>
-                    <div className="flex justify-end gap-1">
-                      <IconButton label="Edit" icon={Pencil} onClick={() => setEditing(u)} />
-                      {!u.emailVerified && (
-                        <>
-                          <IconButton
-                            label="Resend verification code"
-                            icon={Send}
-                            onClick={() => setPending({ user: u, action: 'resend' })}
-                          />
-                          <IconButton
-                            label="Mark email verified"
-                            icon={MailCheck}
-                            onClick={() => setPending({ user: u, action: 'verify' })}
-                          />
-                        </>
-                      )}
-                      <IconButton
-                        label="Send password reset"
-                        icon={KeyRound}
-                        // The API refuses a reset for a deactivated user.
-                        disabled={!u.isActive}
-                        onClick={() => setPending({ user: u, action: 'reset' })}
-                      />
-                    </div>
+                    {canEdit && (
+                      <div className="flex justify-end gap-1">
+                        <IconButton label="Edit" icon={Pencil} onClick={() => setEditing(u)} />
+                        {!u.emailVerified && (
+                          <>
+                            <IconButton
+                              label="Resend verification code"
+                              icon={Send}
+                              onClick={() => setPending({ user: u, action: 'resend' })}
+                            />
+                            <IconButton
+                              label="Mark email verified"
+                              icon={MailCheck}
+                              onClick={() => setPending({ user: u, action: 'verify' })}
+                            />
+                          </>
+                        )}
+                        <IconButton
+                          label="Send password reset"
+                          icon={KeyRound}
+                          // The API refuses a reset for a deactivated user.
+                          disabled={!u.isActive}
+                          onClick={() => setPending({ user: u, action: 'reset' })}
+                        />
+                      </div>
+                    )}
                   </TD>
                 </TR>
               ))}
