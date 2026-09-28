@@ -398,6 +398,29 @@ export interface SubscriptionReceipt {
   periodTo: string;
 }
 
+/** GET /admin/onboarding -- how far one shop has got with setting up. */
+export interface OnboardingRow {
+  id: string;
+  name: string;
+  type: string;
+  createdAt: string;
+  ageDays: number;
+  /** Still on the free trial: when it ends. Null once they've paid. */
+  trialEndsAt: string | null;
+  subscriptionStatus: SubscriptionStatus;
+  steps: { products: boolean; firstSale: boolean; staff: boolean; shiftClosed: boolean; paid: boolean };
+  done: number;
+  counts: { products: number; sales: number; staff: number };
+  firstSaleAt: string | null;
+  lastActiveAt: string | null;
+  /** Signed up 3+ days ago and hasn't sold anything yet. */
+  stuck: boolean;
+  owner: { name: string; email: string } | null;
+  phone: string | null;
+}
+
+export type OnboardingScope = 'trial' | 'recent' | 'all';
+
 /** GET /admin/renewals -- one subscription ending soon, or already ended. */
 export interface RenewalRow {
   id: string;
@@ -615,6 +638,7 @@ export const AdminApi = {
   emailReceipt: (paymentId: string) =>
     post<{ receiptNo: string; emailed: number; failed: number }>(`/admin/payments/${paymentId}/email-receipt`),
   renewals: (days: number) => get<RenewalRow[]>('/admin/renewals', { days }),
+  onboarding: (scope: OnboardingScope) => get<OnboardingRow[]>('/admin/onboarding', { scope }),
   remindBusinesses: (businessIds: string[]) =>
     post<{ reminded: number; skipped: number; emailed: number; failed: number }>('/admin/renewals/remind', {
       businessIds,

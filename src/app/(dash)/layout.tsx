@@ -24,6 +24,7 @@ import {
   LifeBuoy,
   Settings,
   CalendarClock,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { Spinner } from '@/components/ui/misc';
@@ -37,6 +38,7 @@ const NAV = [
   { href: '/growth', label: 'Growth', icon: TrendingUp },
   { href: '/businesses', label: 'Businesses', icon: Building2 },
   { href: '/renewals', label: 'Renewals', icon: CalendarClock },
+  { href: '/onboarding', label: 'Onboarding', icon: ClipboardCheck },
   { href: '/users', label: 'Users', icon: Users },
   { href: '/support', label: 'Support', icon: LifeBuoy },
   { href: '/announcements', label: 'Announcements', icon: Megaphone },
