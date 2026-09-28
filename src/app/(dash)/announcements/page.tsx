@@ -1,8 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Megaphone, Search, X } from 'lucide-react';
-import { AdminApi, apiError, type BusinessRow } from '@/lib/api';
+import Link from 'next/link';
+import { CalendarClock, Eye, Megaphone, Search, X } from 'lucide-react';
+import { AdminApi, apiError, type AnnouncementAudience, type AnnouncementEntry, type BusinessRow } from '@/lib/api';
 import { useCanEdit } from '@/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +14,31 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Spinner, ErrorState, PageHeader, EmptyState, Alert } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTime, cn } from '@/lib/utils';
+
+/** Audiences by subscription status. "selected" is picking shops by hand. */
+const AUDIENCES: { value: AnnouncementAudience; label: string; hint: string }[] = [
+  { value: 'all', label: 'All active shops', hint: 'Every business that isn\u2019t suspended.' },
+  { value: 'trial', label: 'On trial', hint: 'Still on their free trial, never paid.' },
+  { value: 'active', label: 'Paying', hint: 'Paid, with more than 7 days left.' },
+  { value: 'expiring', label: 'Expiring soon', hint: 'Paid, ending within 7 days.' },
+  { value: 'expired', label: 'Expired', hint: 'Past their end date (grace period or locked out).' },
+  { value: 'selected', label: 'Choose shops', hint: 'Pick businesses by name.' },
+];
+
+const AUDIENCE_LABEL: Record<AnnouncementAudience, string> = {
+  all: 'All',
+  selected: 'Chosen',
+  trial: 'Trial',
+  active: 'Paying',
+  expiring: 'Expiring',
+  expired: 'Expired',
+};
+
+/** `<input type="datetime-local">` value for a Date, in the browser's time zone. */
+const toLocalInput = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 /**
  * Tell shops something -- maintenance, a new feature, a price change. It
@@ -25,16 +51,29 @@ export default function AnnouncementsPage() {
   const { show: toast } = useToast();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [audience, setAudience] = useState<'all' | 'selected'>('all');
+  const [audience, setAudience] = useState<AnnouncementAudience>('all');
+  const [when, setWhen] = useState<'now' | 'later'>('now');
+  const [at, setAt] = useState(() => toLocalInput(new Date(Date.now() + 60 * 60 * 1000)));
+  // Fixed when the form opens: the picker's earliest time, not a render-time clock.
+  const [minAt] = useState(() => toLocalInput(new Date()));
+  const [atError, setAtError] = useState<string | null>(null);
   const [picked, setPicked] = useState<Map<string, string>>(new Map());
   const [search, setSearch] = useState('');
   const [email, setEmail] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   const history = useQuery({ queryKey: ['admin-announcements'], queryFn: () => AdminApi.announcements() });
-  const active = useQuery({
-    queryKey: ['admin-businesses', 'active-count'],
-    queryFn: () => AdminApi.businesses({ status: 'active', limit: 1 }),
+  // How many shops the chosen status means today -- the same filter the
+  // Businesses page uses, so the number matches what that page would list.
+  const reach = useQuery({
+    queryKey: ['admin-businesses', 'announce-reach', audience],
+    queryFn: () =>
+      AdminApi.businesses({
+        status: 'active',
+        limit: 1,
+        ...(audience === 'all' || audience === 'selected' ? {} : { subscription: audience }),
+      }),
+    enabled: audience !== 'selected',
   });
   const matches = useQuery({
     queryKey: ['admin-businesses', 'announce-pick', search],
@@ -47,16 +86,21 @@ export default function AnnouncementsPage() {
       AdminApi.sendAnnouncement({
         title: title.trim(),
         body: body.trim(),
-        businessIds: audience === 'selected' ? Array.from(picked.keys()) : undefined,
+        ...(audience === 'selected' ? { businessIds: Array.from(picked.keys()) } : { audience }),
         email,
+        ...(when === 'later' ? { scheduledFor: new Date(at).toISOString() } : {}),
       }),
     onSuccess: (res) => {
-      toast(
-        `Sent to ${res.businesses} business${res.businesses === 1 ? '' : 'es'}${
-          email ? ` · ${res.emailed} email${res.emailed === 1 ? '' : 's'}${res.failed ? `, ${res.failed} failed` : ''}` : ''
-        }`,
-        res.failed ? 'error' : 'success',
-      );
+      if (res.scheduled) {
+        toast(`Scheduled for ${formatDateTime(res.scheduledFor!)} — ${res.businesses} business${res.businesses === 1 ? '' : 'es'} today`, 'success');
+      } else {
+        toast(
+          `Sent to ${res.businesses} business${res.businesses === 1 ? '' : 'es'}${
+            email ? ` · ${res.emailed} email${res.emailed === 1 ? '' : 's'}${res.failed ? `, ${res.failed} failed` : ''}` : ''
+          }`,
+          res.failed ? 'error' : 'success',
+        );
+      }
       setTitle('');
       setBody('');
       setPicked(new Map());
@@ -65,8 +109,22 @@ export default function AnnouncementsPage() {
     },
   });
 
-  const recipients = audience === 'all' ? active.data?.meta.total ?? 0 : picked.size;
-  const ready = title.trim().length >= 3 && body.trim().length > 0 && recipients > 0;
+  const recipients = audience === 'selected' ? picked.size : reach.data?.meta.total ?? 0;
+  const atDate = new Date(at);
+  const ready =
+    title.trim().length >= 3 &&
+    body.trim().length > 0 &&
+    (when === 'now' || !Number.isNaN(atDate.getTime())) &&
+    (audience === 'selected' ? recipients > 0 : true);
+
+  const cancel = useMutation({
+    mutationFn: (id: string) => AdminApi.cancelAnnouncement(id),
+    onSuccess: () => {
+      toast('Scheduled announcement cancelled', 'success');
+      qc.invalidateQueries({ queryKey: ['admin-announcements'] });
+    },
+    onError: (e) => toast(apiError(e), 'error'),
+  });
   const toggle = (b: BusinessRow) =>
     setPicked((m) => {
       const next = new Map(m);
@@ -91,7 +149,18 @@ export default function AnnouncementsPage() {
             className="space-y-4 p-5"
             onSubmit={(e) => {
               e.preventDefault();
-              if (ready) setConfirming(true);
+              if (!ready) return;
+              // Checked here rather than while rendering: "a minute from now"
+              // needs the clock, and render must not read it.
+              if (when === 'later') {
+                const ahead = atDate.getTime() - Date.now();
+                if (ahead < 60_000 || ahead > 90 * 24 * 60 * 60 * 1000) {
+                  setAtError('Pick a time at least a minute from now and within 90 days.');
+                  return;
+                }
+              }
+              setAtError(null);
+              setConfirming(true);
             }}
           >
             <Field label="Title">
@@ -116,23 +185,31 @@ export default function AnnouncementsPage() {
             <fieldset>
               <legend className="mb-2 text-sm font-medium">Send to</legend>
               <div className="flex flex-wrap gap-2">
-                {(['all', 'selected'] as const).map((a) => (
+                {AUDIENCES.map((a) => (
                   <button
-                    key={a}
+                    key={a.value}
                     type="button"
-                    aria-pressed={audience === a}
-                    onClick={() => setAudience(a)}
+                    title={a.hint}
+                    aria-pressed={audience === a.value}
+                    onClick={() => setAudience(a.value)}
                     className={cn(
                       'rounded-md border px-3 py-1.5 text-sm transition-colors',
-                      audience === a
+                      audience === a.value
                         ? 'border-primary bg-primary/10 font-medium text-primary'
                         : 'border-border text-muted-foreground hover:bg-accent',
                     )}
                   >
-                    {a === 'all' ? `All active businesses (${active.data?.meta.total ?? '…'})` : 'Chosen businesses'}
+                    {a.label}
                   </button>
                 ))}
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {AUDIENCES.find((a) => a.value === audience)!.hint}
+                {audience !== 'selected' &&
+                  ` ${reach.isLoading ? '…' : recipients} business${recipients === 1 ? '' : 'es'} today${
+                    when === 'later' ? ' — counted again when it goes out' : ''
+                  }.`}
+              </p>
               {audience === 'selected' && (
                 <div className="mt-3 space-y-2">
                   {picked.size > 0 && (
@@ -188,6 +265,49 @@ export default function AnnouncementsPage() {
               )}
             </fieldset>
 
+            <fieldset>
+              <legend className="mb-2 text-sm font-medium">When</legend>
+              <div className="flex flex-wrap items-center gap-2">
+                {(['now', 'later'] as const).map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    aria-pressed={when === w}
+                    onClick={() => setWhen(w)}
+                    className={cn(
+                      'rounded-md border px-3 py-1.5 text-sm transition-colors',
+                      when === w
+                        ? 'border-primary bg-primary/10 font-medium text-primary'
+                        : 'border-border text-muted-foreground hover:bg-accent',
+                    )}
+                  >
+                    {w === 'now' ? 'Send now' : 'Schedule'}
+                  </button>
+                ))}
+                {when === 'later' && (
+                  <Input
+                    type="datetime-local"
+                    aria-label="Send at"
+                    className="w-auto"
+                    value={at}
+                    min={minAt}
+                    onChange={(e) => {
+                      setAt(e.target.value);
+                      setAtError(null);
+                    }}
+                  />
+                )}
+              </div>
+              {when === 'later' && atError && <p className="mt-1 text-xs text-destructive">{atError}</p>}
+              <p className="mt-2 text-xs text-muted-foreground">
+                For an outage happening now, the{' '}
+                <Link href="/settings" className="text-primary hover:underline">
+                  maintenance banner
+                </Link>{' '}
+                shows across the top of the shop app instead of in the bell.
+              </p>
+            </fieldset>
+
             <label className="flex cursor-pointer items-start gap-3 text-sm">
               <input
                 type="checkbox"
@@ -208,7 +328,7 @@ export default function AnnouncementsPage() {
                 <span className="text-sm text-muted-foreground">Only a full admin can send announcements.</span>
               )}
               <Button type="submit" disabled={!ready || !canEdit} className="gap-1.5">
-                <Megaphone className="h-4 w-4" /> Review & send
+                <Megaphone className="h-4 w-4" /> {when === 'later' ? 'Review & schedule' : 'Review & send'}
               </Button>
             </div>
           </form>
@@ -216,7 +336,7 @@ export default function AnnouncementsPage() {
 
         <Card className="lg:col-span-2">
           <CardHeader className="border-b border-border pb-4">
-            <CardTitle className="text-base font-semibold">Sent</CardTitle>
+            <CardTitle className="text-base font-semibold">History</CardTitle>
           </CardHeader>
           {history.isError ? (
             <ErrorState error={history.error} onRetry={() => history.refetch()} />
@@ -227,23 +347,13 @@ export default function AnnouncementsPage() {
           ) : (
             <ul className="divide-y divide-border">
               {history.data.map((a) => (
-                <li key={a.id} className="px-5 py-4">
-                  <p className="text-sm font-medium text-foreground">{a.details.title}</p>
-                  <p className="mt-1 line-clamp-3 whitespace-pre-line text-sm text-muted-foreground">{a.details.body}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                    <Badge tone="primary">
-                      {a.details.audience === 'all' ? 'All' : 'Chosen'} · {a.details.businesses}
-                    </Badge>
-                    {a.details.email && (
-                      <Badge tone={a.details.failed ? 'warning' : 'default'}>
-                        {a.details.emailed} emailed{a.details.failed ? `, ${a.details.failed} failed` : ''}
-                      </Badge>
-                    )}
-                    <span>
-                      {a.adminEmail} · {formatDateTime(a.createdAt)}
-                    </span>
-                  </div>
-                </li>
+                <HistoryItem
+                  key={a.id}
+                  a={a}
+                  canEdit={canEdit}
+                  cancelling={cancel.isPending && cancel.variables === a.id}
+                  onCancel={() => cancel.mutate(a.id)}
+                />
               ))}
             </ul>
           )}
@@ -253,11 +363,21 @@ export default function AnnouncementsPage() {
       {confirming && (
         <ConfirmDialog
           open
-          title={`Send to ${recipients} business${recipients === 1 ? '' : 'es'}?`}
-          description={`"${title.trim()}" will appear in their notification bell${
-            email ? ', and their owners will be emailed' : ''
-          }. It can't be recalled.`}
-          confirmLabel="Send"
+          title={
+            when === 'later'
+              ? `Schedule for ${formatDateTime(atDate)}?`
+              : `Send to ${recipients} business${recipients === 1 ? '' : 'es'}?`
+          }
+          description={
+            when === 'later'
+              ? `"${title.trim()}" goes to ${AUDIENCES.find((x) => x.value === audience)!.label.toLowerCase()} (${recipients} today) at that time${
+                  email ? ', and their owners will be emailed' : ''
+                }. You can cancel it until then.`
+              : `"${title.trim()}" will appear in their notification bell${
+                  email ? ', and their owners will be emailed' : ''
+                }. It can't be recalled.`
+          }
+          confirmLabel={when === 'later' ? 'Schedule' : 'Send'}
           destructive={false}
           loading={send.isPending}
           error={send.error ? <Alert>{apiError(send.error)}</Alert> : null}
@@ -269,5 +389,76 @@ export default function AnnouncementsPage() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * One announcement: scheduled (with Cancel), cancelled, or sent -- and for a
+ * sent one, how many of the shops it reached have opened it.
+ */
+function HistoryItem({
+  a,
+  canEdit,
+  cancelling,
+  onCancel,
+}: {
+  a: AnnouncementEntry;
+  canEdit: boolean;
+  cancelling: boolean;
+  onCancel: () => void;
+}) {
+  const reached = a.businesses ?? 0;
+  const seenPct = reached ? Math.round((a.seenByShops / reached) * 100) : 0;
+  return (
+    <li className={cn('px-5 py-4', a.status === 'cancelled' && 'opacity-60')}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 break-words text-sm font-medium text-foreground">{a.title}</p>
+        {a.status === 'scheduled' && <Badge tone="warning">Scheduled</Badge>}
+        {a.status === 'cancelled' && <Badge tone="muted">Cancelled</Badge>}
+      </div>
+      <p className="mt-1 line-clamp-3 whitespace-pre-line break-words text-sm text-muted-foreground">{a.body}</p>
+
+      {a.status === 'sent' && reached > 0 && (
+        <div className="mt-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Eye className="h-3 w-3" /> Seen by {a.seenByShops} of {reached} shop{reached === 1 ? '' : 's'}
+            </span>
+            <span>{seenPct}%</span>
+          </div>
+          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+            <div className="h-full rounded-full bg-primary" style={{ width: `${seenPct}%` }} />
+          </div>
+        </div>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <Badge tone="primary">
+          {AUDIENCE_LABEL[a.audience] ?? a.audience}
+          {a.status === 'sent' ? ` · ${reached}` : a.audience === 'selected' ? ` · ${a.businessIds.length}` : ''}
+        </Badge>
+        {a.email && a.status === 'sent' && (
+          <Badge tone={a.failed ? 'warning' : 'default'}>
+            {a.emailed ?? 0} emailed{a.failed ? `, ${a.failed} failed` : ''}
+          </Badge>
+        )}
+        {a.email && a.status !== 'sent' && <Badge tone="default">+ email</Badge>}
+        <span>
+          {a.createdByEmail} ·{' '}
+          {a.status === 'scheduled' ? (
+            <span className="inline-flex items-center gap-1 font-medium text-foreground">
+              <CalendarClock className="h-3 w-3" /> {formatDateTime(a.scheduledFor)}
+            </span>
+          ) : (
+            formatDateTime(a.sentAt ?? a.createdAt)
+          )}
+        </span>
+        {a.status === 'scheduled' && canEdit && (
+          <Button size="sm" variant="ghost" className="ml-auto h-7 px-2 text-xs" loading={cancelling} onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
+      </div>
+    </li>
   );
 }

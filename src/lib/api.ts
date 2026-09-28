@@ -174,29 +174,41 @@ export const EMAIL_TYPES = [
   'support-new',
 ] as const;
 
+/** Who an announcement goes to, by subscription status. `selected` = businessIds. */
+export type AnnouncementAudience = 'all' | 'selected' | 'trial' | 'active' | 'expiring' | 'expired';
+
 export interface SendAnnouncementInput {
   title: string;
   body: string;
-  /** Omit or leave empty for every business that isn't suspended. */
+  /** Given: exactly these businesses (audience "selected"). */
   businessIds?: string[];
+  audience?: Exclude<AnnouncementAudience, 'selected'>;
   email?: boolean;
+  /** ISO time to send it; omitted or past = now. Up to 90 days ahead. */
+  scheduledFor?: string;
 }
 
-/** A past announcement, as recorded in the admin log. */
+/** An announcement: sent, waiting to go out, or cancelled. */
 export interface AnnouncementEntry {
   id: string;
-  adminEmail: string;
+  title: string;
+  body: string;
+  audience: AnnouncementAudience;
+  businessIds: string[];
+  email: boolean;
+  createdByEmail: string;
   createdAt: string;
-  details: {
-    title: string;
-    body: string;
-    audience: 'all' | 'selected';
-    businesses: number;
-    skipped: number;
-    email: boolean;
-    emailed: number;
-    failed: number;
-  };
+  scheduledFor: string | null;
+  sentAt: string | null;
+  cancelledAt: string | null;
+  status: 'scheduled' | 'sent' | 'cancelled';
+  /** Shops it reached (null until sent). */
+  businesses: number | null;
+  emailed: number | null;
+  failed: number | null;
+  /** Shops where at least one person has opened it in the bell. */
+  seenByShops: number;
+  seenByPeople: number;
 }
 
 export interface EmailLogEntry {
@@ -656,7 +668,16 @@ export const AdminApi = {
   emailLog: (params?: object) => get<Paginated<EmailLogEntry>>('/admin/email-log', params),
   announcements: () => get<AnnouncementEntry[]>('/admin/announcements'),
   sendAnnouncement: (dto: SendAnnouncementInput) =>
-    post<{ businesses: number; emailed: number; failed: number }>('/admin/announcements', dto),
+    post<{
+      scheduled: boolean;
+      id: string;
+      scheduledFor?: string;
+      /** Reached (sent now) or would reach today (scheduled). */
+      businesses: number;
+      emailed: number;
+      failed: number;
+    }>('/admin/announcements', dto),
+  cancelAnnouncement: (id: string) => post<{ ok: true }>(`/admin/announcements/${id}/cancel`),
   // ---- Internal notes ----
   notes: (id: string) => get<BusinessNote[]>(`/admin/businesses/${id}/notes`),
   addNote: (id: string, body: string) => post<BusinessNote>(`/admin/businesses/${id}/notes`, { body }),
