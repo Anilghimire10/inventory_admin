@@ -23,6 +23,7 @@ import {
   Megaphone,
   LifeBuoy,
   Settings,
+  CalendarClock,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { Spinner } from '@/components/ui/misc';
@@ -35,6 +36,7 @@ const NAV = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/growth', label: 'Growth', icon: TrendingUp },
   { href: '/businesses', label: 'Businesses', icon: Building2 },
+  { href: '/renewals', label: 'Renewals', icon: CalendarClock },
   { href: '/users', label: 'Users', icon: Users },
   { href: '/support', label: 'Support', icon: LifeBuoy },
   { href: '/announcements', label: 'Announcements', icon: Megaphone },

@@ -19,6 +19,7 @@ const TYPE_LABEL: Record<EmailLogEntry['type'], string> = {
   'low-stock': 'Low-stock digest',
   invite: 'Account invite',
   'subscription-reminder': 'Subscription reminder',
+  'subscription-receipt': 'Subscription receipt',
   announcement: 'Announcement',
   'support-reply': 'Support reply',
   'support-new': 'New support ticket',

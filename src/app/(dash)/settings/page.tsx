@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AdminApi, apiError, type PlatformSettings, type UpdateSettingsInput } from '@/lib/api';
+import { AdminApi, BILLING_FIELDS, apiError, type PlatformSettings, type UpdateSettingsInput } from '@/lib/api';
 import { useCanEdit } from '@/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +13,8 @@ import { formatDateTime } from '@/lib/utils';
 
 /**
  * Platform-wide settings: trial length, open or invite-only signup, the shop
- * app's maintenance banner, and how long shop activity logs are kept.
+ * app's maintenance banner, how long shop activity logs are kept, and the
+ * details printed on subscription receipts.
  */
 export default function SettingsPage() {
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -36,6 +37,17 @@ export default function SettingsPage() {
   );
 }
 
+type BillingField = (typeof BILLING_FIELDS)[number];
+
+/** The receipt-details form: label, placeholder and length cap per field. */
+const BILLING_FORM: { key: BillingField; label: string; placeholder: string; max: number }[] = [
+  { key: 'billingName', label: 'Business name', placeholder: 'e.g. Inventory Cloud Pvt. Ltd.', max: 200 },
+  { key: 'billingTaxId', label: 'PAN / VAT number', placeholder: 'e.g. 609876543', max: 50 },
+  { key: 'billingAddress', label: 'Address', placeholder: 'e.g. Baneshwor, Kathmandu', max: 300 },
+  { key: 'billingPhone', label: 'Phone', placeholder: 'e.g. 01-4XXXXXX', max: 50 },
+  { key: 'billingEmail', label: 'Email', placeholder: 'e.g. billing@yourcompany.com', max: 254 },
+];
+
 /** Digits only, or null for an empty box. */
 const toDays = (v: string) => (v.trim() === '' ? null : Number(v));
 
@@ -47,6 +59,9 @@ function SettingsForm({ settings }: { settings: PlatformSettings }) {
   const [signupOpen, setSignupOpen] = useState(settings.signupOpen);
   const [banner, setBanner] = useState(settings.maintenanceMessage ?? '');
   const [retention, setRetention] = useState(settings.auditRetentionDays?.toString() ?? '');
+  const [billing, setBilling] = useState<Record<BillingField, string>>(
+    () => Object.fromEntries(BILLING_FIELDS.map((k) => [k, settings[k] ?? ''])) as Record<BillingField, string>,
+  );
 
   const trial = toDays(trialDays);
   const keep = toDays(retention);
@@ -60,6 +75,9 @@ function SettingsForm({ settings }: { settings: PlatformSettings }) {
     ...(signupOpen !== settings.signupOpen ? { signupOpen } : {}),
     ...((banner.trim() || null) !== settings.maintenanceMessage ? { maintenanceMessage: banner.trim() || null } : {}),
     ...(keep !== settings.auditRetentionDays ? { auditRetentionDays: keep } : {}),
+    ...Object.fromEntries(
+      BILLING_FIELDS.filter((k) => (billing[k].trim() || null) !== settings[k]).map((k) => [k, billing[k].trim() || null]),
+    ),
   };
   const dirty = Object.keys(changes).length > 0;
 
@@ -171,6 +189,33 @@ function SettingsForm({ settings }: { settings: PlatformSettings }) {
           </p>
           {keep !== null && !keepError && keep !== settings.auditRetentionDays && (
             <Alert>Entries older than {keep} days are deleted for good at the next nightly run (03:30).</Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Receipt details</CardTitle>
+          <CardDescription>
+            Printed at the top of every subscription receipt, as who was paid. Leave a line empty to leave it off.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          {BILLING_FORM.map((f) => (
+            <Field key={f.key} label={f.label} className={f.key === 'billingAddress' ? 'sm:col-span-2' : undefined}>
+              <Input
+                maxLength={f.max}
+                placeholder={f.placeholder}
+                value={billing[f.key]}
+                disabled={!canEdit}
+                onChange={(e) => setBilling((b) => ({ ...b, [f.key]: e.target.value }))}
+              />
+            </Field>
+          ))}
+          {!settings.billingName && (
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Without a business name, receipts show only the shop&apos;s details and the payment.
+            </p>
           )}
         </CardContent>
       </Card>

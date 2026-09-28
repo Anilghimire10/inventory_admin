@@ -168,6 +168,7 @@ export const EMAIL_TYPES = [
   'low-stock',
   'invite',
   'subscription-reminder',
+  'subscription-receipt',
   'announcement',
   'support-reply',
   'support-new',
@@ -369,7 +370,52 @@ export interface SubscriptionPayment {
   periodTo: string;
   note?: string | null;
   createdAt: string;
+  /** Sequential across the platform; printed as SUB-000042 (`receiptLabel`). */
+  receiptNo: number;
   recordedByAdmin?: { id: string; name: string } | null;
+}
+
+/** SUB-000042: how a receipt number is printed. Matches the API. */
+export const receiptLabel = (n: number) => `SUB-${String(n).padStart(6, '0')}`;
+
+/** GET /admin/payments/:id/receipt -- everything a printed receipt shows. */
+export interface SubscriptionReceipt {
+  receiptNo: string;
+  issuedAt: string;
+  seller: {
+    name: string | null;
+    taxId: string | null;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+  };
+  buyer: { businessId: string; name: string; taxId: string | null };
+  amount: number;
+  currency: string;
+  methodLabel: string;
+  reference: string | null;
+  periodFrom: string;
+  periodTo: string;
+}
+
+/** GET /admin/renewals -- one subscription ending soon, or already ended. */
+export interface RenewalRow {
+  id: string;
+  name: string;
+  endsAt: string;
+  /** When they're actually locked out, after the grace period. */
+  accessEndsAt: string;
+  daysLeft: number;
+  overdue: boolean;
+  kind: 'trial' | 'paid';
+  lastPayment: {
+    amount: number;
+    currency: string;
+    periodFrom: string;
+    periodTo: string;
+    paidAt: string;
+  } | null;
+  owners: { name: string; email: string; emailVerified: boolean }[];
 }
 
 /** Give `months` or `periodTo`, not both. */
@@ -382,6 +428,8 @@ export interface RecordPaymentInput {
   periodFrom?: string;
   periodTo?: string;
   note?: string;
+  /** Email the receipt to the business's owners once it's recorded. */
+  emailReceipt?: boolean;
 }
 
 /** A shop user, as the support tools see them: across every business. */
@@ -443,13 +491,30 @@ export interface PlatformSettings {
   maintenanceMessage: string | null;
   /** Null keeps shop activity logs forever. */
   auditRetentionDays: number | null;
+  /** Printed on subscription receipts as the seller. Null = left off. */
+  billingName: string | null;
+  billingTaxId: string | null;
+  billingAddress: string | null;
+  billingPhone: string | null;
+  billingEmail: string | null;
   updatedAt: string;
   updatedBy: string | null;
   activityLog: { total: number; oldestAt: string | null; dueForRemoval: number };
 }
 
+export const BILLING_FIELDS = [
+  'billingName',
+  'billingTaxId',
+  'billingAddress',
+  'billingPhone',
+  'billingEmail',
+] as const;
+
 export type UpdateSettingsInput = Partial<
-  Pick<PlatformSettings, 'trialDays' | 'signupOpen' | 'maintenanceMessage' | 'auditRetentionDays'>
+  Pick<
+    PlatformSettings,
+    'trialDays' | 'signupOpen' | 'maintenanceMessage' | 'auditRetentionDays' | (typeof BILLING_FIELDS)[number]
+  >
 >;
 
 export type TicketStatus = 'OPEN' | 'CLOSED';
@@ -529,7 +594,12 @@ export const AdminApi = {
   /** Records the payment and extends the paid-until date in one step. */
   recordPayment: async (id: string, dto: RecordPaymentInput) =>
     (
-      await api.post<{ payment: SubscriptionPayment; business: { subscribedTo: string | null } }>(
+      await api.post<{
+        payment: SubscriptionPayment;
+        business: { subscribedTo: string | null };
+        /** Present when the receipt was asked to be emailed. */
+        receipt?: { emailed: number; failed: number; error?: string };
+      }>(
         `/admin/businesses/${id}/payments`,
         dto,
       )
@@ -541,6 +611,14 @@ export const AdminApi = {
         `/admin/businesses/${id}/send-reminder`,
       )
     ).data,
+  receipt: (paymentId: string) => get<SubscriptionReceipt>(`/admin/payments/${paymentId}/receipt`),
+  emailReceipt: (paymentId: string) =>
+    post<{ receiptNo: string; emailed: number; failed: number }>(`/admin/payments/${paymentId}/email-receipt`),
+  renewals: (days: number) => get<RenewalRow[]>('/admin/renewals', { days }),
+  remindBusinesses: (businessIds: string[]) =>
+    post<{ reminded: number; skipped: number; emailed: number; failed: number }>('/admin/renewals/remind', {
+      businessIds,
+    }),
   customers: (id: string, params?: object) =>
     get<Paginated<AdminCustomer>>(`/admin/businesses/${id}/customers`, params),
   products: (id: string, params?: object) =>

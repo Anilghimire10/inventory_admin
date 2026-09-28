@@ -1,10 +1,11 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BellRing, Receipt, Wallet } from 'lucide-react';
+import { BellRing, Mail, Printer, Receipt, Wallet } from 'lucide-react';
 import {
   AdminApi,
   apiError,
+  receiptLabel,
   SUBSCRIPTION_PAYMENT_METHODS,
   type BusinessDetail,
   type RecordPaymentInput,
@@ -21,6 +22,7 @@ import { Pagination } from '@/components/ui/pagination';
 import { Spinner, ErrorState, Alert, EmptyState } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
 import { formatMoney, formatDate } from '@/lib/utils';
+import { printReceipt } from '@/lib/receipt';
 
 const METHOD_LABELS: Record<SubscriptionPaymentMethod, string> = {
   CASH: 'Cash',
@@ -85,9 +87,14 @@ export function SubscriptionActions({
         <RecordPaymentDialog
           business={business}
           onClose={() => setRecording(false)}
-          onSaved={(paidUntil) => {
+          onSaved={(r) => {
             setRecording(false);
-            toast(`Payment recorded. Paid until ${formatDate(paidUntil)}`, 'success');
+            const recorded = `${receiptLabel(r.payment.receiptNo)} recorded. Paid until ${formatDate(r.business.subscribedTo)}`;
+            // The payment is saved either way; only the email can fail.
+            if (!r.receipt) toast(recorded, 'success');
+            else if (r.receipt.error || r.receipt.failed > 0)
+              toast(`${recorded}, but the receipt email failed${r.receipt.error ? `: ${r.receipt.error}` : ''}. Resend it from Payments.`, 'error');
+            else toast(`${recorded}. Receipt emailed to ${r.receipt.emailed} owner(s)`, 'success');
             onChanged();
           }}
         />
@@ -103,7 +110,7 @@ function RecordPaymentDialog({
 }: {
   business: BusinessDetail;
   onClose: () => void;
-  onSaved: (paidUntil: string | null) => void;
+  onSaved: (result: Awaited<ReturnType<typeof AdminApi.recordPayment>>) => void;
 }) {
   const qc = useQueryClient();
   const [amount, setAmount] = useState('');
@@ -113,12 +120,13 @@ function RecordPaymentDialog({
   const [until, setUntil] = useState('');
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
+  const [emailReceipt, setEmailReceipt] = useState(true);
 
   const save = useMutation({
     mutationFn: (dto: RecordPaymentInput) => AdminApi.recordPayment(business.id, dto),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['admin-business-payments', business.id] });
-      onSaved(r.business.subscribedTo);
+      onSaved(r);
     },
   });
 
@@ -144,6 +152,7 @@ function RecordPaymentDialog({
             method,
             reference: reference.trim() || undefined,
             note: note.trim() || undefined,
+            emailReceipt,
             ...(periodMode === 'months'
               ? { months: Number(months) }
               : // End of the chosen day, so "paid until the 30th" includes the 30th.
@@ -237,6 +246,17 @@ function RecordPaymentDialog({
         <Field label="Note (optional)">
           <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
+        <p className="-mt-2 text-xs text-muted-foreground">Only admins see the note; it isn&apos;t printed on the receipt.</p>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-primary"
+            checked={emailReceipt}
+            onChange={(e) => setEmailReceipt(e.target.checked)}
+          />
+          Email the receipt to the owner
+        </label>
 
         {save.error != null && <Alert>{apiError(save.error)}</Alert>}
 
@@ -255,7 +275,36 @@ function RecordPaymentDialog({
 
 /** Every subscription payment this business has made, newest first. */
 export function PaymentsTab({ id }: { id: string }) {
+  const { show: toast } = useToast();
   const [page, setPage] = useState(1);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const print = async (paymentId: string) => {
+    setBusy(`print:${paymentId}`);
+    try {
+      printReceipt(await AdminApi.receipt(paymentId));
+    } catch (e) {
+      toast(apiError(e), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+  const email = async (paymentId: string) => {
+    setBusy(`email:${paymentId}`);
+    try {
+      const r = await AdminApi.emailReceipt(paymentId);
+      toast(
+        r.failed > 0
+          ? `${r.receiptNo}: sent to ${r.emailed} owner(s), ${r.failed} failed`
+          : `${r.receiptNo} emailed to ${r.emailed} owner(s)`,
+        r.failed > 0 ? 'error' : 'success',
+      );
+    } catch (e) {
+      toast(apiError(e), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['admin-business-payments', id, page],
     queryFn: () => AdminApi.payments(id, { page, limit: 20 }),
@@ -278,17 +327,22 @@ export function PaymentsTab({ id }: { id: string }) {
       <Table>
         <THead>
           <tr>
+            <TH>Receipt</TH>
             <TH>Received</TH>
             <TH className="text-right">Amount</TH>
             <TH>Method</TH>
             <TH>Period</TH>
             <TH>Reference</TH>
             <TH>Recorded by</TH>
+            <TH className="text-right">
+              <span className="sr-only">Receipt actions</span>
+            </TH>
           </tr>
         </THead>
         <TBody>
           {data.data.map((p) => (
             <TR key={p.id}>
+              <TD className="whitespace-nowrap font-mono text-xs">{receiptLabel(p.receiptNo)}</TD>
               <TD className="whitespace-nowrap text-muted-foreground">{formatDate(p.createdAt)}</TD>
               <TD className="text-right font-semibold text-foreground">
                 {formatMoney(p.amount, p.currency)}
@@ -304,6 +358,28 @@ export function PaymentsTab({ id }: { id: string }) {
                 {p.note && <div className="text-xs">{p.note}</div>}
               </TD>
               <TD className="text-muted-foreground">{p.recordedByAdmin?.name ?? '—'}</TD>
+              <TD className="whitespace-nowrap text-right">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`Print ${receiptLabel(p.receiptNo)}`}
+                  title="Print receipt"
+                  loading={busy === `print:${p.id}`}
+                  onClick={() => print(p.id)}
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`Email ${receiptLabel(p.receiptNo)} to the owner`}
+                  title="Email receipt to the owner"
+                  loading={busy === `email:${p.id}`}
+                  onClick={() => email(p.id)}
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                </Button>
+              </TD>
             </TR>
           ))}
         </TBody>
