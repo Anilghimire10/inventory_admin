@@ -1,10 +1,11 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, ShieldCheck } from 'lucide-react';
+import { LogOut, Plus, Pencil, ShieldCheck } from 'lucide-react';
 import { AdminApi, apiError, type AdminRole, type PlatformAdmin } from '@/lib/api';
 import { useAuth, useCanEdit } from '@/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -41,6 +42,20 @@ export default function AdminsPage() {
   const [dialog, setDialog] = useState<{ mode: 'create' } | { mode: 'edit'; admin: PlatformAdmin } | null>(
     null,
   );
+  const [signingOut, setSigningOut] = useState<PlatformAdmin | null>(null);
+  const signOut = useMutation({
+    mutationFn: (id: string) => AdminApi.signOutAdmin(id),
+    onSuccess: (r) => {
+      toast(
+        r.ended
+          ? `${signingOut?.name ?? 'They'} signed out of ${r.ended} session${r.ended === 1 ? '' : 's'}`
+          : `${signingOut?.name ?? 'They'} had no open sessions`,
+        'success',
+      );
+      setSigningOut(null);
+    },
+    onError: (e) => toast(apiError(e), 'error'),
+  });
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['admin-admins'],
@@ -106,6 +121,11 @@ export default function AdminsPage() {
                 </TD>
                 <TD className="whitespace-nowrap text-muted-foreground">{formatDate(a.createdAt)}</TD>
                 <TD className="text-right">
+                  {canEdit && a.isActive && a.id !== me?.id && (
+                    <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSigningOut(a)}>
+                      <LogOut className="h-3.5 w-3.5" /> Sign out
+                    </Button>
+                  )}
                   {canEdit && (
                     <Button
                       variant="ghost"
@@ -121,6 +141,18 @@ export default function AdminsPage() {
             ))}
           </TBody>
         </Table>
+      )}
+
+      {signingOut && (
+        <ConfirmDialog
+          open
+          title={`Sign ${signingOut.name} out everywhere?`}
+          description="Every browser they're signed in on is signed out now. They can sign straight back in with their password — to stop that, deactivate the account instead."
+          confirmLabel="Sign out"
+          loading={signOut.isPending}
+          onConfirm={() => signOut.mutate(signingOut.id)}
+          onCancel={() => setSigningOut(null)}
+        />
       )}
 
       {dialog?.mode === 'create' && (

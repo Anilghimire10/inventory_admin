@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, Spinner } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/auth/AuthProvider';
 
 const digitsOnly = (v: string) => v.replace(/[^\d\s]/g, '');
 
@@ -24,6 +25,7 @@ const digitsOnly = (v: string) => v.replace(/[^\d\s]/g, '');
  */
 export function TwoFactorCard() {
   const qc = useQueryClient();
+  const { refresh } = useAuth();
   const { show: toast } = useToast();
   const me = useQuery({ queryKey: ['admin-me'], queryFn: () => AdminApi.me() });
   const [setup, setSetup] = useState<{ secret: string; otpauthUrl: string } | null>(null);
@@ -60,6 +62,8 @@ export function TwoFactorCard() {
       setCode('');
       qc.invalidateQueries({ queryKey: ['admin-me'] });
       qc.invalidateQueries({ queryKey: ['admin-admins'] });
+      // If the platform required it, the rest of the panel opens up now.
+      void refresh();
       toast('Two-factor is on. Other sessions are signed out, and you will be asked for a code when you sign in.', 'success');
     },
   });
@@ -71,6 +75,7 @@ export function TwoFactorCard() {
       setCode('');
       qc.invalidateQueries({ queryKey: ['admin-me'] });
       qc.invalidateQueries({ queryKey: ['admin-admins'] });
+      void refresh();
       toast('Two-factor is off.', 'success');
     },
   });

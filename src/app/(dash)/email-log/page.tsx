@@ -20,6 +20,7 @@ const TYPE_LABEL: Record<EmailLogEntry['type'], string> = {
   invite: 'Account invite',
   'subscription-reminder': 'Subscription reminder',
   'subscription-receipt': 'Subscription receipt',
+  'admin-new-sign-in': 'Admin new sign-in',
   announcement: 'Announcement',
   'support-reply': 'Support reply',
   'support-new': 'New support ticket',

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdminApi, BILLING_FIELDS, apiError, type PlatformSettings, type UpdateSettingsInput } from '@/lib/api';
-import { useCanEdit } from '@/auth/AuthProvider';
+import { useAuth, useCanEdit } from '@/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/label';
@@ -57,6 +57,9 @@ function SettingsForm({ settings }: { settings: PlatformSettings }) {
   const canEdit = useCanEdit();
   const [trialDays, setTrialDays] = useState(settings.trialDays?.toString() ?? '');
   const [signupOpen, setSignupOpen] = useState(settings.signupOpen);
+  const [require2fa, setRequire2fa] = useState(settings.requireAdminTwoFactor);
+  const { admin } = useAuth();
+  const myTwoFactor = !!admin?.twoFactorEnabled;
   const [banner, setBanner] = useState(settings.maintenanceMessage ?? '');
   const [retention, setRetention] = useState(settings.auditRetentionDays?.toString() ?? '');
   const [billing, setBilling] = useState<Record<BillingField, string>>(
@@ -73,6 +76,7 @@ function SettingsForm({ settings }: { settings: PlatformSettings }) {
   const changes: UpdateSettingsInput = {
     ...(trial !== settings.trialDays ? { trialDays: trial } : {}),
     ...(signupOpen !== settings.signupOpen ? { signupOpen } : {}),
+    ...(require2fa !== settings.requireAdminTwoFactor ? { requireAdminTwoFactor: require2fa } : {}),
     ...((banner.trim() || null) !== settings.maintenanceMessage ? { maintenanceMessage: banner.trim() || null } : {}),
     ...(keep !== settings.auditRetentionDays ? { auditRetentionDays: keep } : {}),
     ...Object.fromEntries(
@@ -189,6 +193,35 @@ function SettingsForm({ settings }: { settings: PlatformSettings }) {
           </p>
           {keep !== null && !keepError && keep !== settings.auditRetentionDays && (
             <Alert>Entries older than {keep} days are deleted for good at the next nightly run (03:30).</Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Admin security</CardTitle>
+          <CardDescription>Every admin account can see every shop&apos;s data.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 accent-primary"
+              checked={require2fa}
+              // Turning it on from an account without two-factor would lock
+              // this admin out of this page; the API refuses it too.
+              disabled={!canEdit || (!settings.requireAdminTwoFactor && !myTwoFactor)}
+              onChange={(e) => setRequire2fa(e.target.checked)}
+            />
+            <span>
+              <span className="block font-medium">Require two-factor sign-in for all admins</span>
+              <span className="text-sm text-muted-foreground">
+                Admins without it can only open their Account page, to set it up, until they have.
+              </span>
+            </span>
+          </label>
+          {!settings.requireAdminTwoFactor && !myTwoFactor && (
+            <p className="text-xs text-muted-foreground">Turn on two-factor for your own account first (Account page).</p>
           )}
         </CardContent>
       </Card>

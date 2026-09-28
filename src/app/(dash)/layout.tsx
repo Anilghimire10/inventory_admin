@@ -69,6 +69,11 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!loading && !admin) router.replace('/login');
   }, [loading, admin, router]);
+  // Two-factor is required and not set up: the Account page is the only one
+  // the API will serve, so don't strand the admin on a page of errors.
+  useEffect(() => {
+    if (admin?.twoFactorRequired && !pathname.startsWith('/account')) router.replace('/account');
+  }, [admin, pathname, router]);
 
   if (loading || !admin) {
     return (

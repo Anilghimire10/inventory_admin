@@ -6,7 +6,9 @@ interface AuthState {
   admin: AdminInfo | null;
   loading: boolean;
   login: (email: string, password: string, code?: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
+  /** Re-read who is signed in, e.g. after turning two-factor on. */
+  refresh: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthState>(null as never);
@@ -39,9 +41,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await AdminApi.login(email, password, code);
     setToken(res.accessToken);
     setAdmin(res.admin);
+    // Login's answer doesn't say whether two-factor is required and missing;
+    // /me does, and the layout sends such an admin to set it up.
+    try {
+      setAdmin(await AdminApi.me());
+    } catch {
+      // Keep what login returned; the next request will say if it matters.
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // End the session on the server too, so a copied token is dead at once --
+    // not just forgotten by this tab. Best effort: signing out must work even
+    // if the API can't be reached.
+    try {
+      await AdminApi.logout();
+    } catch {
+      // The token will still expire on its own.
+    }
     clearToken();
     setAdmin(null);
     // A full page load, deliberately, not router.push(): signing out has to
@@ -53,5 +70,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     location.href = '/login';
   };
 
-  return <Ctx.Provider value={{ admin, loading, login, logout }}>{children}</Ctx.Provider>;
+  const refresh = async () => {
+    try {
+      setAdmin(await AdminApi.me());
+    } catch {
+      // A failed refresh leaves the current state; a 401 signs out anyway.
+    }
+  };
+
+  return <Ctx.Provider value={{ admin, loading, login, logout, refresh }}>{children}</Ctx.Provider>;
 }

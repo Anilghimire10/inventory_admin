@@ -10,8 +10,9 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { PageHeader, Alert } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
 import { TwoFactorCard } from './two-factor';
+import { SessionsCard } from './sessions';
 
-/** This admin's own account: password and two-factor sign-in. */
+/** This admin's own account: password, two-factor sign-in and where you're signed in. */
 export default function AccountPage() {
   const { admin } = useAuth();
   const { show: toast } = useToast();
@@ -38,6 +39,12 @@ export default function AccountPage() {
   return (
     <div className="max-w-lg space-y-6">
       <PageHeader title="Account" description={admin ? `${admin.name} · ${admin.email}` : undefined} />
+      {admin?.twoFactorRequired && (
+        <Alert>
+          Two-factor sign-in is required for every admin on this platform. Turn it on below — the rest of the panel
+          opens as soon as you have.
+        </Alert>
+      )}
 
       <Card className="p-5">
         <h2 className="text-base font-semibold">Change password</h2>
@@ -88,6 +95,7 @@ export default function AccountPage() {
       </Card>
 
       <TwoFactorCard />
+      <SessionsCard />
     </div>
   );
 }

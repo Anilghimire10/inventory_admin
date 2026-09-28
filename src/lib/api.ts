@@ -22,6 +22,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
+    // Two-factor is required and not set up yet: the Account page is the one
+    // place that works until it is.
+    if (
+      error.response?.status === 403 &&
+      (error.response.data as { code?: string } | undefined)?.code === 'TWOFA_REQUIRED' &&
+      !location.pathname.startsWith('/account')
+    ) {
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      location.href = '/account';
+    }
     if (error.response?.status === 401 && getToken()) {
       clearToken();
       // Same hard navigation as logout, and for the same reason: the session
@@ -63,6 +73,21 @@ export interface AdminInfo {
   role: AdminRole;
   /** From GET /admin/auth/me; login's response leaves it out. */
   twoFactorEnabled?: boolean;
+  /** The platform requires two-factor and this admin hasn't set it up. */
+  twoFactorRequired?: boolean;
+}
+
+/** GET /admin/auth/sessions -- one place this admin is signed in. */
+export interface AdminSessionInfo {
+  id: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  ip: string | null;
+  userAgent: string | null;
+  /** "Chrome on macOS" */
+  device: string;
+  current: boolean;
 }
 
 /** Mirrors SubscriptionStatus in the API (`api/src/common/subscription.ts`). */
@@ -175,6 +200,7 @@ export const EMAIL_TYPES = [
   'invite',
   'subscription-reminder',
   'subscription-receipt',
+  'admin-new-sign-in',
   'announcement',
   'support-reply',
   'support-new',
@@ -532,6 +558,8 @@ export interface PlatformSettings {
   maintenanceMessage: string | null;
   /** Null keeps shop activity logs forever. */
   auditRetentionDays: number | null;
+  /** Admins without two-factor can only reach their Account page. */
+  requireAdminTwoFactor: boolean;
   /** Printed on subscription receipts as the seller. Null = left off. */
   billingName: string | null;
   billingTaxId: string | null;
@@ -554,7 +582,12 @@ export const BILLING_FIELDS = [
 export type UpdateSettingsInput = Partial<
   Pick<
     PlatformSettings,
-    'trialDays' | 'signupOpen' | 'maintenanceMessage' | 'auditRetentionDays' | (typeof BILLING_FIELDS)[number]
+    | 'trialDays'
+    | 'signupOpen'
+    | 'maintenanceMessage'
+    | 'auditRetentionDays'
+    | 'requireAdminTwoFactor'
+    | (typeof BILLING_FIELDS)[number]
   >
 >;
 
@@ -633,6 +666,13 @@ export const AdminApi = {
   disableTwoFactor: (password: string, code: string) =>
     post<{ enabled: false }>('/admin/auth/2fa/disable', { password, code }),
   me: () => get<AdminInfo>('/admin/auth/me'),
+  /** End this session on the server (the panel then drops the token). */
+  logout: () => post<{ ok: true }>('/admin/auth/logout'),
+  sessions: () => get<AdminSessionInfo[]>('/admin/auth/sessions'),
+  revokeSession: (id: string) => post<{ ok: true }>(`/admin/auth/sessions/${id}/revoke`),
+  revokeOtherSessions: () => post<{ ended: number }>('/admin/auth/sessions/revoke-others'),
+  /** Sign another admin out of every session. Full admins only. */
+  signOutAdmin: (id: string) => post<{ ended: number }>(`/admin/admins/${id}/sign-out`),
   stats: () => get<PlatformStats>('/admin/stats'),
   businesses: (params?: object) => get<Paginated<BusinessRow>>('/admin/businesses', params),
   business: (id: string) => get<BusinessDetail>(`/admin/businesses/${id}`),
