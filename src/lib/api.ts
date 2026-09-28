@@ -567,6 +567,18 @@ export interface SupportTicketRow {
   /** Open, and the shop spoke last. */
   awaitingReply: boolean;
   business: { id: string; name: string };
+  /** Which admin is handling it; shops never see this. */
+  assignedAdmin: { id: string; name: string } | null;
+}
+
+/** A canned answer. {name} and {business} are filled in from the ticket. */
+export interface SupportReplyTemplate {
+  id: string;
+  title: string;
+  body: string;
+  createdByEmail: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SupportMessage {
@@ -745,6 +757,14 @@ export const AdminApi = {
     get<Paginated<SupportTicketRow> & { openCount: number }>('/admin/support', params),
   ticket: (id: string) => get<SupportTicket>(`/admin/support/${id}`),
   replyToTicket: (id: string, body: string) => post<SupportTicket>(`/admin/support/${id}/messages`, { body }),
+  assignTicket: (id: string, adminId: string | null) =>
+    patch<SupportTicket>(`/admin/support/${id}/assign`, { adminId }),
+  replyTemplates: () => get<SupportReplyTemplate[]>('/admin/support/templates'),
+  createReplyTemplate: (dto: { title: string; body: string }) =>
+    post<SupportReplyTemplate>('/admin/support/templates', dto),
+  updateReplyTemplate: (id: string, dto: { title: string; body: string }) =>
+    patch<SupportReplyTemplate>(`/admin/support/templates/${id}`, dto),
+  deleteReplyTemplate: async (id: string) => (await api.delete(`/admin/support/templates/${id}`)).data,
   setTicketStatus: (id: string, status: TicketStatus) =>
     patch<SupportTicket>(`/admin/support/${id}`, { status }),
 
