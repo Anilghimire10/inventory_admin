@@ -2,8 +2,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Building2, Activity, Sparkles } from 'lucide-react';
-import { AdminApi, type GrowthStats } from '@/lib/api';
+import { AlertTriangle, Building2, Activity, CalendarClock, Sparkles, TrendingUp } from 'lucide-react';
+import { AdminApi, receiptLabel, type GrowthStats } from '@/lib/api';
+import { DateRange, dayEnd, dayStart } from '@/components/ui/date-range';
+import { ExportButton } from '@/components/export-button';
+import { downloadCsv, fetchAll, today } from '@/lib/csv';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/table';
 import { Spinner, ErrorState, PageHeader } from '@/components/ui/misc';
@@ -45,6 +48,47 @@ export default function GrowthPage() {
               value={Math.max(0, data.businesses - data.activeLast7Days - data.atRisk.count)}
               sub="No sale in 7 days, not yet quiet"
               icon={Sparkles}
+            />
+          </div>
+
+          {/* Subscriptions: are trials turning into customers, and staying? */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <TextStat
+              label="Trial to paid"
+              value={data.trialToPaid.rate === null ? '—' : `${data.trialToPaid.rate}%`}
+              sub={
+                data.trialToPaid.rate === null
+                  ? 'No trial has ended yet'
+                  : `${data.trialToPaid.converted} paid · ${data.trialToPaid.endedUnpaid} trial${data.trialToPaid.endedUnpaid === 1 ? '' : 's'} ended unpaid`
+              }
+              icon={TrendingUp}
+            />
+            <TextStat
+              label="Lapsed"
+              value={String(data.lapsed.count)}
+              sub={
+                data.lapsed.rate === null
+                  ? 'Nobody has paid yet'
+                  : `${data.lapsed.rate}% of ${data.lapsed.ofPaying} paying shop${data.lapsed.ofPaying === 1 ? '' : 's'} not renewed`
+              }
+              icon={AlertTriangle}
+              warn={data.lapsed.count > 0}
+              href="/renewals"
+            />
+            <TextStat
+              label="Due this month"
+              value={
+                data.dueThisMonth.length
+                  ? data.dueThisMonth.map((d) => formatMoney(d.total, d.currency)).join(' + ')
+                  : '—'
+              }
+              sub={
+                data.dueThisMonth.length
+                  ? `${data.dueThisMonth.reduce((n, d) => n + d.count, 0)} renewal(s), at their last price`
+                  : 'No paid subscription ends this month'
+              }
+              icon={CalendarClock}
+              href="/renewals"
             />
           </div>
 
@@ -134,6 +178,44 @@ function Stat({
       </div>
     </Card>
   );
+}
+
+/** A Stat whose value is already text (a rate, a money total), optionally a link. */
+function TextStat({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  warn,
+  href,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  icon: React.ComponentType<{ className?: string }>;
+  warn?: boolean;
+  href?: string;
+}) {
+  const body = (
+    <Card className={cn('h-full p-5', href && 'transition-colors hover:bg-accent/40')}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+          <p className="mt-1.5 break-words text-2xl font-semibold tracking-tight">{value}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
+        </div>
+        <div
+          className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
+            warn ? 'bg-warning/15 text-warning' : 'bg-primary/10 text-primary',
+          )}
+        >
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+    </Card>
+  );
+  return href ? <Link href={href}>{body}</Link> : body;
 }
 
 const CHART_HEIGHT = 160;
@@ -258,6 +340,54 @@ function PaymentsCard({
           })}
         </div>
       )}
+      <PaymentsExport />
     </>
+  );
+}
+
+/**
+ * Every recorded payment in a date range, as a CSV for the books: receipt
+ * number, shop and its PAN/VAT, amount, method, period, reference.
+ */
+function PaymentsExport() {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  return (
+    <div className="space-y-2 border-t border-border px-5 py-4">
+      <p className="text-xs font-medium text-muted-foreground">Export payments</p>
+      <DateRange
+        from={from}
+        to={to}
+        onChange={(f, t) => {
+          setFrom(f);
+          setTo(t);
+        }}
+      />
+      <ExportButton
+        label="Payments CSV"
+        run={async () => {
+          const range = { from: dayStart(from), to: dayEnd(to) };
+          const { rows, truncated } = await fetchAll((p, limit) => AdminApi.allPayments({ ...range, page: p, limit }));
+          downloadCsv(
+            `payments-${from || 'all'}-to-${to || today()}.csv`,
+            ['Receipt', 'Recorded', 'Business', 'Business PAN/VAT', 'Amount', 'Currency', 'Method', 'Period from', 'Period to', 'Reference', 'Recorded by'],
+            rows.map((p) => [
+              receiptLabel(p.receiptNo),
+              p.createdAt,
+              p.business.name,
+              p.business.taxId ?? '',
+              p.amount,
+              p.currency,
+              p.method,
+              p.periodFrom,
+              p.periodTo,
+              p.reference ?? '',
+              p.recordedByAdmin?.name ?? '',
+            ]),
+          );
+          return { count: rows.length, truncated };
+        }}
+      />
+    </div>
   );
 }

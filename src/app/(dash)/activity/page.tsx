@@ -9,34 +9,72 @@ import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
 import { Spinner, ErrorState, PageHeader, EmptyState } from '@/components/ui/misc';
 import { formatDateTime } from '@/lib/utils';
+import { DateRange, dayEnd, dayStart } from '@/components/ui/date-range';
+import { ExportButton } from '@/components/export-button';
+import { downloadCsv, fetchAll, today } from '@/lib/csv';
 
 export default function ActivityPage() {
   const [search, setSearch] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
+  const filters = { search: search || undefined, from: dayStart(from), to: dayEnd(to) };
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['admin-activity-feed', search, page],
-    queryFn: () => AdminApi.activityFeed({ search: search || undefined, page, limit: 30 }),
+    queryKey: ['admin-activity-feed', search, from, to, page],
+    queryFn: () => AdminApi.activityFeed({ ...filters, page, limit: 30 }),
   });
 
   return (
     <div>
       <PageHeader
         title="Global Activity Feed"
-        description="Real-time operational events, sales, staff logins, and modifications across all businesses."
+        description="Sales, staff sign-ins and changes across every business, newest first. Each page you view here is written to the Admin Log."
       />
 
-      <div className="relative my-5 max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          className="pl-9"
-          placeholder="Filter by action (e.g. sale, login, product)…"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
+      <div className="my-5 flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Filter by action (e.g. sale, login, product)…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+          />
+        </div>
+        <DateRange
+          from={from}
+          to={to}
+          onChange={(f, t) => {
+            setFrom(f);
+            setTo(t);
             setPage(1);
           }}
         />
+        <div className="sm:ml-auto">
+          <ExportButton
+            run={async () => {
+              const { rows, truncated } = await fetchAll((p, limit) => AdminApi.activityFeed({ ...filters, page: p, limit }));
+              downloadCsv(
+                `activity-${today()}.csv`,
+                ['When', 'Business', 'User', 'Role', 'Action', 'Summary', 'IP'],
+                rows.map((e) => [
+                  e.createdAt,
+                  e.business?.name ?? '',
+                  e.user?.name ?? e.userName ?? '',
+                  e.user?.role ?? '',
+                  e.action,
+                  e.summary ?? '',
+                  e.ip ?? '',
+                ]),
+              );
+              return { count: rows.length, truncated };
+            }}
+          />
+        </div>
       </div>
 
       {isError ? (
@@ -47,7 +85,7 @@ export default function ActivityPage() {
         <EmptyState
           icon={ScrollText}
           title="No activity recorded"
-          description={search ? 'No events matching your filter keyword.' : 'No system activity logged yet.'}
+          description={search || from || to ? 'Nothing matches the filter.' : 'No system activity logged yet.'}
         />
       ) : (
         <>

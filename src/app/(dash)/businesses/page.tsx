@@ -24,6 +24,8 @@ import { formatDate, formatDateTime, formatRelative } from '@/lib/utils';
 import { Tooltip } from '@/components/ui/tooltip';
 import { CreateBusinessDialog } from './create-business';
 import { useCanEdit } from '@/auth/AuthProvider';
+import { ExportButton } from '@/components/export-button';
+import { downloadCsv, fetchAll, today } from '@/lib/csv';
 
 const SUBSCRIPTION_LABELS: Record<SubscriptionFilter, string> = {
   active: 'Active',
@@ -73,20 +75,41 @@ function BusinessesList() {
     setPage(1);
   };
 
+  const filters = {
+    search: search || undefined,
+    status: status || undefined,
+    subscription: subscription || undefined,
+    type: type || undefined,
+    sort,
+    days: 7,
+  };
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['admin-businesses', search, status, subscription, type, sort, page],
-    queryFn: () =>
-      AdminApi.businesses({
-        search: search || undefined,
-        status: status || undefined,
-        subscription: subscription || undefined,
-        type: type || undefined,
-        sort,
-        days: 7,
-        page,
-        limit: 20,
-      }),
+    queryFn: () => AdminApi.businesses({ ...filters, page, limit: 20 }),
   });
+  const exportCsv = async () => {
+    const { rows, truncated } = await fetchAll((p, limit) => AdminApi.businesses({ ...filters, page: p, limit }));
+    downloadCsv(
+      `businesses-${today()}.csv`,
+      ['Name', 'Type', 'Currency', 'Suspended', 'Subscription', 'Paid until', 'Signed up', 'Last active', 'Users', 'Stores', 'Products', 'Sales', 'Payments'],
+      rows.map((b) => [
+        b.name,
+        b.type,
+        b.currency,
+        b.isSuspended ? 'yes' : 'no',
+        b.subscriptionStatus,
+        b.subscribedTo ?? '',
+        b.createdAt,
+        b.lastActiveAt ?? '',
+        b._count.users,
+        b._count.stores,
+        b._count.products,
+        b._count.sales,
+        b._count.subscriptionPayments,
+      ]),
+    );
+    return { count: rows.length, truncated };
+  };
 
   const hasFilters = Boolean(search || status || subscription || type);
 
@@ -104,11 +127,14 @@ function BusinessesList() {
         title="Businesses"
         description="All registered tenant stores, billing status, and metric counters."
         action={
-          canEdit && (
-            <Button className="gap-1.5" onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4" /> New business
-            </Button>
-          )
+          <div className="flex flex-wrap gap-2">
+            <ExportButton run={exportCsv} />
+            {canEdit && (
+              <Button className="gap-1.5" onClick={() => setCreating(true)}>
+                <Plus className="h-4 w-4" /> New business
+              </Button>
+            )}
+          </div>
         }
       />
       {creating && <CreateBusinessDialog onClose={() => setCreating(false)} />}

@@ -11,6 +11,9 @@ import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
 import { Spinner, ErrorState, PageHeader, EmptyState } from '@/components/ui/misc';
 import { formatDateTime } from '@/lib/utils';
+import { DateRange, dayEnd, dayStart } from '@/components/ui/date-range';
+import { ExportButton } from '@/components/export-button';
+import { downloadCsv, fetchAll, today } from '@/lib/csv';
 
 /**
  * What platform admins did: suspensions, payments, user fixes, viewing a
@@ -20,18 +23,20 @@ import { formatDateTime } from '@/lib/utils';
 export default function AdminLogPage() {
   const [search, setSearch] = useState('');
   const [adminId, setAdminId] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
+  const filters = {
+    search: search.trim() || undefined,
+    adminId: adminId || undefined,
+    from: dayStart(from),
+    to: dayEnd(to),
+  };
 
   const admins = useQuery({ queryKey: ['admin-admins'], queryFn: () => AdminApi.admins() });
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['admin-audit-log', search, adminId, page],
-    queryFn: () =>
-      AdminApi.auditLog({
-        search: search.trim() || undefined,
-        adminId: adminId || undefined,
-        page,
-        limit: 30,
-      }),
+    queryKey: ['admin-audit-log', search, adminId, from, to, page],
+    queryFn: () => AdminApi.auditLog({ ...filters, page, limit: 30 }),
   });
 
   return (
@@ -70,6 +75,36 @@ export default function AdminLogPage() {
             ))}
           </Select>
         </div>
+        <DateRange
+          from={from}
+          to={to}
+          onChange={(f, t) => {
+            setFrom(f);
+            setTo(t);
+            setPage(1);
+          }}
+        />
+        <div className="sm:ml-auto">
+          <ExportButton
+            run={async () => {
+              const { rows, truncated } = await fetchAll((p, limit) => AdminApi.auditLog({ ...filters, page: p, limit }));
+              downloadCsv(
+                `admin-log-${today()}.csv`,
+                ['When', 'Admin', 'Admin email', 'Action', 'Business', 'IP', 'Details'],
+                rows.map((e) => [
+                  e.createdAt,
+                  e.admin?.name ?? '',
+                  e.adminEmail,
+                  e.action,
+                  e.business?.name ?? '',
+                  e.ip ?? '',
+                  e.details ? JSON.stringify(e.details) : '',
+                ]),
+              );
+              return { count: rows.length, truncated };
+            }}
+          />
+        </div>
       </div>
 
       {isError ? (
@@ -77,7 +112,7 @@ export default function AdminLogPage() {
       ) : isLoading || !data ? (
         <Spinner className="py-20" />
       ) : data.data.length === 0 ? (
-        <EmptyState icon={History} title="Nothing logged" description={search || adminId ? 'No entries match the filter.' : undefined} />
+        <EmptyState icon={History} title="Nothing logged" description={search || adminId || from || to ? 'No entries match the filter.' : undefined} />
       ) : (
         <>
           <Table>

@@ -17,6 +17,8 @@ import { Spinner, ErrorState, PageHeader, EmptyState, Alert } from '@/components
 import { useToast } from '@/components/ui/toast';
 import { Tooltip } from '@/components/ui/tooltip';
 import { formatDate } from '@/lib/utils';
+import { ExportButton } from '@/components/export-button';
+import { downloadCsv, fetchAll, today } from '@/lib/csv';
 
 type Pending = { user: TenantUser; action: 'verify' | 'resend' | 'reset' };
 
@@ -80,6 +82,29 @@ export default function UsersPage() {
       <PageHeader
         title="Users"
         description="Shop users across every business. Search by email or name to help someone sign in."
+        action={
+          <ExportButton
+            run={async () => {
+              const search_ = search.trim() || undefined;
+              const { rows, truncated } = await fetchAll((p, limit) => AdminApi.users({ search: search_, page: p, limit }));
+              downloadCsv(
+                `users-${today()}.csv`,
+                ['Name', 'Email', 'Role', 'Business', 'Store', 'Active', 'Email verified', 'Created'],
+                rows.map((u) => [
+                  u.name,
+                  u.email,
+                  u.role,
+                  u.business.name,
+                  u.store?.name ?? '',
+                  u.isActive ? 'yes' : 'no',
+                  u.emailVerified ? 'yes' : 'no',
+                  u.createdAt,
+                ]),
+              );
+              return { count: rows.length, truncated };
+            }}
+          />
+        }
       />
 
       <div className="relative mb-5 max-w-sm">

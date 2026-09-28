@@ -125,6 +125,12 @@ export interface GrowthStats {
   atRisk: { count: number; businesses: { id: string; name: string; lastSaleAt: string }[] };
   paymentsThisMonth: { currency: string; total: number; count: number }[];
   paymentsLastMonth: { currency: string; total: number; count: number }[];
+  /** Paid at least once, out of those plus trials that ended unpaid. Null until any trial has decided. */
+  trialToPaid: { converted: number; endedUnpaid: number; rate: number | null };
+  /** Paid before, now past the end date, out of every shop that has paid. */
+  lapsed: { count: number; ofPaying: number; rate: number | null };
+  /** Paying shops ending this calendar month, at their last price. */
+  dueThisMonth: { currency: string; total: number; count: number }[];
 }
 
 export interface CronRun {
@@ -676,6 +682,12 @@ export const AdminApi = {
   shifts: (id: string, params?: object) => get<Paginated<AdminShift>>(`/admin/businesses/${id}/shifts`, params),
   // ---- Platform insights ----
   growth: () => get<GrowthStats>('/admin/growth'),
+  /** Every subscription payment, newest first; from/to bound when recorded. */
+  allPayments: (params?: object) =>
+    get<Paginated<SubscriptionPayment & { business: { id: string; name: string; taxId: string | null } }>>(
+      '/admin/payments',
+      params,
+    ),
   system: () => get<SystemStatus>('/admin/system'),
   emailLog: (params?: object) => get<Paginated<EmailLogEntry>>('/admin/email-log', params),
   announcements: () => get<AnnouncementEntry[]>('/admin/announcements'),
