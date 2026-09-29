@@ -204,6 +204,7 @@ export const EMAIL_TYPES = [
   'announcement',
   'support-reply',
   'support-new',
+  'support-followup',
 ] as const;
 
 /** Who an announcement goes to, by subscription status. `selected` = businessIds. */
@@ -593,10 +594,25 @@ export type UpdateSettingsInput = Partial<
 
 export type TicketStatus = 'OPEN' | 'CLOSED';
 
+/** What a ticket is about. The shop picks it; an admin can correct it. */
+export type TicketCategory = 'BILLING' | 'PROBLEM' | 'HOW_TO' | 'FEATURE' | 'OTHER';
+
+export const TICKET_CATEGORIES: { value: TicketCategory; label: string }[] = [
+  { value: 'PROBLEM', label: 'Problem' },
+  { value: 'HOW_TO', label: 'How to' },
+  { value: 'BILLING', label: 'Billing' },
+  { value: 'FEATURE', label: 'Feature request' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+export const ticketCategoryLabel = (c: TicketCategory) =>
+  TICKET_CATEGORIES.find((x) => x.value === c)?.label ?? 'Other';
+
 export interface SupportTicketRow {
   id: string;
   subject: string;
   status: TicketStatus;
+  category: TicketCategory;
   userName: string;
   userEmail: string;
   lastMessageAt: string;
@@ -806,7 +822,7 @@ export const AdminApi = {
 
   // ---- Support inbox ----
   tickets: (params?: object) =>
-    get<Paginated<SupportTicketRow> & { openCount: number }>('/admin/support', params),
+    get<Paginated<SupportTicketRow> & { openCount: number; awaitingCount: number }>('/admin/support', params),
   ticket: (id: string) => get<SupportTicket>(`/admin/support/${id}`),
   replyToTicket: (id: string, body: string) => post<SupportTicket>(`/admin/support/${id}/messages`, { body }),
   assignTicket: (id: string, adminId: string | null) =>
@@ -817,8 +833,9 @@ export const AdminApi = {
   updateReplyTemplate: (id: string, dto: { title: string; body: string }) =>
     patch<SupportReplyTemplate>(`/admin/support/templates/${id}`, dto),
   deleteReplyTemplate: async (id: string) => (await api.delete(`/admin/support/templates/${id}`)).data,
-  setTicketStatus: (id: string, status: TicketStatus) =>
-    patch<SupportTicket>(`/admin/support/${id}`, { status }),
+  /** Close or reopen, and/or correct the category. */
+  updateTicket: (id: string, dto: { status?: TicketStatus; category?: TicketCategory }) =>
+    patch<SupportTicket>(`/admin/support/${id}`, dto),
 
   // Global activity feed across all businesses
   activityFeed: (params?: object) => get<Paginated<AdminActivity>>('/admin/activity', params),

@@ -31,6 +31,7 @@ import { useToast } from '@/components/ui/toast';
 import { useCanEdit } from '@/auth/AuthProvider';
 import { PaymentsTab, SubscriptionActions } from './payments';
 import { NotesTab } from './notes';
+import { SupportTab } from './support';
 import { ProductsTab, PurchasesTab, ShiftsTab } from './more-tabs';
 import { DataControls } from './data-controls';
 
@@ -43,7 +44,8 @@ type Tab =
   | 'purchases'
   | 'shifts'
   | 'activity'
-  | 'notes';
+  | 'notes'
+  | 'support';
 
 export default function BusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -190,7 +192,7 @@ export default function BusinessDetailPage() {
 
       {/* Tabs navigation */}
       <div className="flex gap-2 overflow-x-auto border-b border-border">
-        {(['overview', 'payments', 'customers', 'sales', 'products', 'purchases', 'shifts', 'activity', 'notes'] as Tab[]).map((t) => (
+        {(['overview', 'payments', 'customers', 'sales', 'products', 'purchases', 'shifts', 'activity', 'notes', 'support'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -304,6 +306,7 @@ export default function BusinessDetailPage() {
         {tab === 'shifts' && <ShiftsTab id={id} money={money} />}
         {tab === 'activity' && <ActivityTab id={id} />}
         {tab === 'notes' && <NotesTab id={id} />}
+        {tab === 'support' && <SupportTab id={id} />}
       </div>
 
       {/* Edit Business Modal */}

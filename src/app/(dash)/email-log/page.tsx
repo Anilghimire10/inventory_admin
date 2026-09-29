@@ -24,6 +24,7 @@ const TYPE_LABEL: Record<EmailLogEntry['type'], string> = {
   announcement: 'Announcement',
   'support-reply': 'Support reply',
   'support-new': 'New support ticket',
+  'support-followup': 'Support follow-up',
 };
 
 const STATUS: Record<EmailLogEntry['status'], { tone: 'success' | 'destructive' | 'muted'; label: string }> = {
