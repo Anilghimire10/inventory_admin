@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  ChevronRight,
   Users,
   History,
   UserCog,
@@ -33,21 +34,48 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { cn } from '@/lib/utils';
 import { AdminApi } from '@/lib/api';
 
-const NAV = [
-  { href: '/', label: 'Overview', icon: LayoutDashboard },
-  { href: '/growth', label: 'Growth', icon: TrendingUp },
-  { href: '/businesses', label: 'Businesses', icon: Building2 },
-  { href: '/renewals', label: 'Renewals', icon: CalendarClock },
-  { href: '/onboarding', label: 'Onboarding', icon: ClipboardCheck },
-  { href: '/users', label: 'Users', icon: Users },
-  { href: '/support', label: 'Support', icon: LifeBuoy },
-  { href: '/announcements', label: 'Announcements', icon: Megaphone },
-  { href: '/activity', label: 'Activity Log', icon: ScrollText },
-  { href: '/admins', label: 'Admins', icon: ShieldCheck },
-  { href: '/admin-log', label: 'Admin Log', icon: History },
-  { href: '/email-log', label: 'Email Log', icon: Mail },
-  { href: '/system', label: 'System', icon: Activity },
-  { href: '/settings', label: 'Settings', icon: Settings },
+// The sidebar, in sections, as in the shop app: Overview is always open, the
+// rest fold away, and the section holding the current page stays open.
+const NAV_GROUPS = [
+  {
+    label: 'Overview',
+    items: [
+      { href: '/', label: 'Overview', icon: LayoutDashboard },
+      { href: '/growth', label: 'Growth', icon: TrendingUp },
+      { href: '/onboarding', label: 'Onboarding', icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: 'Shops',
+    items: [
+      { href: '/businesses', label: 'Businesses', icon: Building2 },
+      { href: '/renewals', label: 'Renewals', icon: CalendarClock },
+      { href: '/users', label: 'Users', icon: Users },
+    ],
+  },
+  {
+    label: 'Support',
+    items: [
+      { href: '/support', label: 'Support', icon: LifeBuoy },
+      { href: '/announcements', label: 'Announcements', icon: Megaphone },
+    ],
+  },
+  {
+    label: 'Logs',
+    items: [
+      { href: '/activity', label: 'Activity Log', icon: ScrollText },
+      { href: '/admin-log', label: 'Admin Log', icon: History },
+      { href: '/email-log', label: 'Email Log', icon: Mail },
+    ],
+  },
+  {
+    label: 'Platform',
+    items: [
+      { href: '/admins', label: 'Admins', icon: ShieldCheck },
+      { href: '/system', label: 'System', icon: Activity },
+      { href: '/settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ];
 
 export default function DashLayout({ children }: { children: React.ReactNode }) {
@@ -57,13 +85,15 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname() ?? '';
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  // Open tickets, for the badge on Support. Polled, since shops write in.
-  const openTickets = useQuery({
-    queryKey: ['admin-support', 'open-count'],
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // Tickets waiting on us, for the badge on Support: open, and the shop wrote
+  // last. Answered ones drop off. Polled, since shops write in.
+  const awaitingTickets = useQuery({
+    queryKey: ['admin-support', 'awaiting-count'],
     queryFn: () => AdminApi.tickets({ status: 'OPEN', limit: 1 }),
     enabled: !!admin,
     refetchInterval: 60_000,
-    select: (d) => d.openCount,
+    select: (d) => d.awaitingCount,
   });
 
   useEffect(() => {
@@ -85,6 +115,18 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
 
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname.startsWith(href);
+  // The section holding the current page stays open even if it was folded.
+  const activeLabel = NAV_GROUPS.find((g) => g.items.some((i) => isActive(i.href)))?.label;
+
+  const supportBadge = (count: number | undefined) =>
+    !!count && (
+      <span
+        className="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal text-primary-foreground"
+        aria-label={`${count} waiting for a reply`}
+      >
+        {count}
+      </span>
+    );
 
   return (
     <div className="flex min-h-screen">
@@ -112,35 +154,59 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
           </button>
         </div>
 
-        <nav className="flex flex-col gap-1 p-3">
-          <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
-            Management
-          </p>
-          {NAV.map((item) => {
-            const active = isActive(item.href);
+        <nav className="flex max-h-[calc(100dvh-4rem)] flex-col gap-4 overflow-y-auto p-3">
+          {NAV_GROUPS.map((group) => {
+            const isOverview = group.label === 'Overview';
+            const isCollapsed = !isOverview && group.label !== activeLabel && collapsed[group.label] === true;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  active
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-                {item.href === '/support' && !!openTickets.data && (
-                  <span
-                    className="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground"
-                    aria-label={`${openTickets.data} open`}
+              <div key={group.label} className="flex flex-col gap-1">
+                {isOverview ? (
+                  <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    {group.label}
+                  </p>
+                ) : (
+                  <button
+                    onClick={() =>
+                      setCollapsed((c) => ({
+                        ...c,
+                        [group.label]: !(c[group.label] === true && group.label !== activeLabel),
+                      }))
+                    }
+                    aria-expanded={!isCollapsed}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
                   >
-                    {openTickets.data}
-                  </span>
+                    {group.label}
+                    {/* Folded away, the Support count moves up here so it isn't hidden. */}
+                    {isCollapsed && group.label === 'Support' && supportBadge(awaitingTickets.data)}
+                    {isCollapsed ? (
+                      <ChevronRight className={cn('h-4 w-4', !(group.label === 'Support' && awaitingTickets.data) && 'ml-auto')} />
+                    ) : (
+                      <ChevronDown className="ml-auto h-4 w-4" />
+                    )}
+                  </button>
                 )}
-              </Link>
+                {!isCollapsed && (
+                  <div className="flex flex-col gap-1">
+                    {group.items.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileOpen(false)}
+                        className={cn(
+                          'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                          isActive(item.href)
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                        )}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {item.label}
+                        {item.href === '/support' && supportBadge(awaitingTickets.data)}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
