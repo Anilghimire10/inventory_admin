@@ -12,6 +12,7 @@ import { formatDateTime } from '@/lib/utils';
 import { DateRange, dayEnd, dayStart } from '@/components/ui/date-range';
 import { ExportButton } from '@/components/export-button';
 import { downloadCsv, fetchAll, today } from '@/lib/csv';
+import { RetentionSettings } from '@/components/settings/sections';
 
 export default function ActivityPage() {
   const [search, setSearch] = useState('');
@@ -31,6 +32,8 @@ export default function ActivityPage() {
         title="Global Activity Feed"
         description="Sales, staff sign-ins and changes across every business, newest first. Each page you view here is written to the Admin Log."
       />
+
+      <RetentionSettings />
 
       <div className="my-5 flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-sm">

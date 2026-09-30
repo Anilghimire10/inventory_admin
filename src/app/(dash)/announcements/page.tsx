@@ -1,7 +1,6 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
 import { CalendarClock, Eye, Megaphone, Search, X } from 'lucide-react';
 import { AdminApi, apiError, type AnnouncementAudience, type AnnouncementEntry, type BusinessRow } from '@/lib/api';
 import { useCanEdit } from '@/auth/AuthProvider';
@@ -14,6 +13,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Spinner, ErrorState, PageHeader, EmptyState, Alert } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTime, cn } from '@/lib/utils';
+import { MaintenanceBannerSettings } from '@/components/settings/sections';
 
 /** Audiences by subscription status. "selected" is picking shops by hand. */
 const AUDIENCES: { value: AnnouncementAudience; label: string; hint: string }[] = [
@@ -139,6 +139,8 @@ export default function AnnouncementsPage() {
         title="Announcements"
         description="Send a message to every shop's notification bell, or to the shops you choose."
       />
+
+      <MaintenanceBannerSettings />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">
@@ -300,11 +302,8 @@ export default function AnnouncementsPage() {
               </div>
               {when === 'later' && atError && <p className="mt-1 text-xs text-destructive">{atError}</p>}
               <p className="mt-2 text-xs text-muted-foreground">
-                For an outage happening now, the{' '}
-                <Link href="/settings" className="text-primary hover:underline">
-                  maintenance banner
-                </Link>{' '}
-                shows across the top of the shop app instead of in the bell.
+                For an outage happening now, the maintenance banner (at the top of this page) shows across the top of
+                the shop app instead of in the bell.
               </p>
             </fieldset>
 

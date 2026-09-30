@@ -11,6 +11,7 @@ import { Spinner, ErrorState, PageHeader, EmptyState } from '@/components/ui/mis
 import { Tooltip } from '@/components/ui/tooltip';
 import { SubscriptionBadge } from '@/components/ui';
 import { formatDate, formatRelative, cn } from '@/lib/utils';
+import { SignupSettings } from '@/components/settings/sections';
 
 /** The setup steps, in the order a new shop normally does them. */
 const STEPS: { key: keyof OnboardingRow['steps']; label: string }[] = [
@@ -65,6 +66,8 @@ export default function OnboardingPage() {
         title="Onboarding"
         description="How far each shop has got with setting up. Call the stuck ones before their trial ends."
       />
+
+      <SignupSettings />
 
       <div className="mb-5 flex flex-wrap items-center gap-4">
         <div className="w-full sm:w-72">

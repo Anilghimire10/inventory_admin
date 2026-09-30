@@ -167,6 +167,8 @@ const JOB_LABEL: Record<string, string> = {
   'low-stock-digest': 'Low-stock digest emails',
   'subscription-reminders': 'Subscription reminders',
   'scheduled-announcements': 'Scheduled announcements',
+  'admin-digest': 'Admin daily summary',
+  'online-payments': 'Online payment check (eSewa, Khalti, connectIPS)',
 };
 
 function CronRow({ run }: { run: CronRun }) {

@@ -205,6 +205,8 @@ export const EMAIL_TYPES = [
   'support-reply',
   'support-new',
   'support-followup',
+  'payment-claim',
+  'admin-digest',
 ] as const;
 
 /** Who an announcement goes to, by subscription status. `selected` = businessIds. */
@@ -329,6 +331,14 @@ export interface BusinessDetail extends BusinessRow {
   totalSalesValue: number;
   totalTransactions: number;
   recentSales: { id: string; receiptNo: string; total: string; status: string; createdAt: string }[];
+  /** The tenders the shop takes at its till (its Settings -> Payment methods). */
+  acceptedTenders?: string[];
+  /** The plan the shop is on (null: none, or since removed), and its branches open. */
+  plan?: { id: string; name: string; maxStores: number | null } | null;
+  activeStores?: number;
+  planId?: string | null;
+  /** The shop's first steps (its Dashboard's Getting started), each true once done. */
+  setup?: { products: boolean; stock: boolean; paymentMethods: boolean; staff: boolean; sale: boolean };
 }
 
 export interface UpdateBusinessInput {
@@ -337,6 +347,8 @@ export interface UpdateBusinessInput {
   salesModel?: SalesModel;
   currency?: string;
   taxId?: string;
+  /** The shop's plan by id; null takes it off any plan (no branch limit). */
+  planId?: string | null;
 }
 
 export interface Paginated<T> {
@@ -353,6 +365,17 @@ export interface AdminCustomer {
   createdAt: string;
   _count: { sales: number };
 }
+
+/** How a shop's sale was paid, by name (the API's PaymentMethod). */
+export const SALE_TENDER_LABELS: Record<string, string> = {
+  CASH: 'Cash',
+  CARD: 'Card',
+  MOBILE: 'Mobile / QR',
+  KHALTI: 'Khalti',
+  CONNECTIPS: 'connectIPS',
+  CREDIT: 'Credit',
+  MIXED: 'Part credit',
+};
 
 export interface AdminSaleRow {
   id: string;
@@ -400,8 +423,17 @@ export interface AdminActivity {
 }
 
 /** Mirrors SubscriptionPaymentMethod in the API schema. */
-export const SUBSCRIPTION_PAYMENT_METHODS = ['CASH', 'BANK', 'ESEWA', 'KHALTI', 'OTHER'] as const;
+export const SUBSCRIPTION_PAYMENT_METHODS = ['CASH', 'BANK', 'ESEWA', 'KHALTI', 'CONNECTIPS', 'OTHER'] as const;
 export type SubscriptionPaymentMethod = (typeof SUBSCRIPTION_PAYMENT_METHODS)[number];
+
+export const PAYMENT_METHOD_LABELS: Record<SubscriptionPaymentMethod, string> = {
+  CASH: 'Cash',
+  BANK: 'Bank transfer',
+  ESEWA: 'eSewa',
+  KHALTI: 'Khalti',
+  CONNECTIPS: 'connectIPS',
+  OTHER: 'Other',
+};
 
 /** Money a shop paid for its subscription, recorded by hand in this panel. */
 export interface SubscriptionPayment {
@@ -413,6 +445,8 @@ export interface SubscriptionPayment {
   reference?: string | null;
   periodFrom: string;
   periodTo: string;
+  /** The plan it paid for, by its name then. */
+  planName?: string | null;
   note?: string | null;
   createdAt: string;
   /** Sequential across the platform; printed as SUB-000042 (`receiptLabel`). */
@@ -498,6 +532,8 @@ export interface RecordPaymentInput {
   note?: string;
   /** Email the receipt to the business's owners once it's recorded. */
   emailReceipt?: boolean;
+  /** The plan it pays for; the shop moves onto it. */
+  planId?: string;
 }
 
 /** A shop user, as the support tools see them: across every business. */
@@ -567,10 +603,87 @@ export interface PlatformSettings {
   billingAddress: string | null;
   billingPhone: string | null;
   billingEmail: string | null;
+  /** How shops pay, shown on their Subscription page. */
+  subscriptionPrice: string | null;
+  paymentInstructions: string | null;
+  paymentMethods: PaymentMethodSetting[] | null;
+  /** The plans shops choose from, in the order they see them. */
+  plans: SubscriptionPlan[] | null;
+  /** Shops on each plan, by plan id; "none" counts those on no plan. */
+  planUsage: Record<string, number>;
+  /** The gateways set up on the server; their keys are in its environment. */
+  onlineGateways: { id: 'ESEWA' | 'KHALTI' | 'CONNECTIPS'; label: string; test: boolean }[];
+  /** The morning summary email to full admins. */
+  adminDigestEnabled: boolean;
+  /** Day (Nepal time) it last went out. */
+  adminDigestSentOn: string | null;
   updatedAt: string;
   updatedBy: string | null;
   activityLog: { total: number; oldestAt: string | null; dueForRemoval: number };
 }
+
+export type PaymentClaimStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'CANCELLED';
+
+/** A shop's "I've paid" report, as the Payments to confirm page lists it. */
+export interface PaymentClaimRow {
+  id: string;
+  businessId: string;
+  business: { id: string; name: string; currency: string; isSubscribed: boolean; subscribedTo: string | null };
+  submittedByName: string;
+  amount: number;
+  currency: string;
+  method: SubscriptionPaymentMethod;
+  reference: string | null;
+  months: number | null;
+  /** The plan the shop says it paid for, by its name then. */
+  planId: string | null;
+  planName: string | null;
+  note: string | null;
+  proofUrl: string | null;
+  status: PaymentClaimStatus;
+  rejectReason: string | null;
+  reviewedBy: { name: string } | null;
+  reviewedAt: string | null;
+  payment: { id: string; receiptNo: number } | null;
+  createdAt: string;
+}
+
+/** One way shops can pay the platform: eSewa, Khalti, a bank account ... */
+export interface PaymentMethodSetting {
+  label: string;
+  details: string;
+  /** An uploaded QR code, from AdminApi.uploadPaymentQr. */
+  qrUrl?: string | null;
+}
+
+/** The lengths a plan can be sold for, in months. */
+export const PLAN_LENGTHS = [1, 3, 12] as const;
+
+/**
+ * A subscription plan (Plans & billing). `id` stays the same through a
+ * rename or a price change; a new plan is sent without one and given one.
+ */
+export interface SubscriptionPlan {
+  id?: string;
+  name: string;
+  description: string | null;
+  /** What's included, one short line each. */
+  features: string[];
+  /** Branches a shop may have open; null is unlimited. */
+  maxStores: number | null;
+  /**
+   * One per length sold (1, 3 or 12 months): `amount` in NPR, and
+   * `amountUsd` for shops outside Nepal (null: they see the NPR price).
+   */
+  prices: { months: number; amount: number; amountUsd?: number | null }[];
+}
+
+/** The currency a shop's plans are priced in: NPR for a rupee shop, USD for any other. Matches the API. */
+export const pricingCurrency = (businessCurrency: string | null | undefined) =>
+  (businessCurrency ?? 'NPR').toUpperCase() === 'NPR' ? 'NPR' : 'USD';
+
+/** "1 month", "3 months", "1 year". */
+export const planLengthLabel = (m: number) => (m === 12 ? '1 year' : `${m} month${m === 1 ? '' : 's'}`);
 
 export const BILLING_FIELDS = [
   'billingName',
@@ -588,6 +701,11 @@ export type UpdateSettingsInput = Partial<
     | 'maintenanceMessage'
     | 'auditRetentionDays'
     | 'requireAdminTwoFactor'
+    | 'subscriptionPrice'
+    | 'paymentInstructions'
+    | 'paymentMethods'
+    | 'plans'
+    | 'adminDigestEnabled'
     | (typeof BILLING_FIELDS)[number]
   >
 >;
@@ -819,6 +937,27 @@ export const AdminApi = {
   // ---- Platform settings ----
   settings: () => get<PlatformSettings>('/admin/settings'),
   updateSettings: (dto: UpdateSettingsInput) => patch<PlatformSettings>('/admin/settings', dto),
+  // ---- Payment reports ("I've paid") ----
+  paymentClaims: (params?: { status?: PaymentClaimStatus; page?: number; limit?: number }) =>
+    get<Paginated<PaymentClaimRow> & { pendingCount: number }>('/admin/payment-claims', params),
+  confirmPaymentClaim: (
+    id: string,
+    dto: { months?: number; periodTo?: string; amount?: number; emailReceipt?: boolean; planId?: string },
+  ) =>
+    post<{ claimId: string; business: { subscribedTo: string | null }; receipt?: { emailed: number; failed: number; error?: string } }>(
+      `/admin/payment-claims/${id}/confirm`,
+      dto,
+    ),
+  rejectPaymentClaim: (id: string, reason: string) =>
+    post<{ claimId: string; rejected: true }>(`/admin/payment-claims/${id}/reject`, { reason }),
+  /** The daily summary, to yourself, now. */
+  sendDigestToMe: () => post<{ sentTo: string }>('/admin/settings/digest/send-me'),
+  /** A payment QR code image; returns the url to put in a payment method. */
+  uploadPaymentQr: async (file: File) => {
+    const form = new FormData();
+    form.append('image', file);
+    return (await api.post<{ url: string }>('/admin/settings/payment-qr', form)).data;
+  },
 
   // ---- Support inbox ----
   tickets: (params?: object) =>

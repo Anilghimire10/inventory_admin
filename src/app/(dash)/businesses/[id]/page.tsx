@@ -2,13 +2,14 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Ban, CheckCircle2, Eye, Pencil, Store, Users, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCircle2, Circle, Eye, Pencil, Store, Users, ShoppingCart } from 'lucide-react';
 import {
   AdminApi,
   AdminSaleRow,
   apiError,
   BUSINESS_TYPES,
   SALES_MODELS,
+  SALE_TENDER_LABELS,
   type BusinessDetail,
   type BusinessType,
   type SalesModel,
@@ -29,7 +30,7 @@ import { Spinner, ErrorState, Alert, EmptyState } from '@/components/ui/misc';
 import { formatMoney, formatDate, formatDateTime, formatRelative, cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
 import { useCanEdit } from '@/auth/AuthProvider';
-import { PaymentsTab, SubscriptionActions } from './payments';
+import { PaymentsTab, SubscriptionActions, usePlans } from './payments';
 import { NotesTab } from './notes';
 import { SupportTab } from './support';
 import { ProductsTab, PurchasesTab, ShiftsTab } from './more-tabs';
@@ -232,6 +233,7 @@ export default function BusinessDetailPage() {
                   }
                 />
               )}
+              <PlanControl business={data} canEdit={canEdit} onChanged={invalidate} />
               {canEdit ? (
                 <SubscriptionActions business={data} onChanged={invalidate} />
               ) : (
@@ -293,6 +295,8 @@ export default function BusinessDetailPage() {
                 )}
               </div>
             </Card>
+
+            <SetupCard business={data} />
 
             <DataControls business={data} />
           </div>
@@ -395,6 +399,127 @@ export default function BusinessDetailPage() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The shop's plan and the branches it counts against its limit, with a way
+ * to move it to another plan (a full admin only). Normally a payment moves
+ * it; this is for a deal agreed by phone, or putting it right.
+ */
+function PlanControl({ business, canEdit, onChanged }: { business: BusinessDetail; canEdit: boolean; onChanged: () => void }) {
+  const { show: toast } = useToast();
+  const { data: plans = [] } = usePlans();
+  const [picked, setPicked] = useState<string | null>(null);
+  const value = picked ?? business.plan?.id ?? '';
+  const open = business.activeStores ?? 0;
+  const max = business.plan?.maxStores ?? null;
+  const change = useMutation({
+    mutationFn: () => AdminApi.updateBusiness(business.id, { planId: value || null }),
+    onSuccess: () => {
+      setPicked(null);
+      onChanged();
+      toast(value ? 'Plan changed' : 'Taken off its plan', 'success');
+    },
+    onError: (e) => toast(apiError(e), 'error'),
+  });
+  const target = plans.find((p) => p.id === value);
+  const over = target && target.maxStores !== null && open > target.maxStores;
+  return (
+    <div className="flex flex-wrap items-end gap-3 border-t border-border px-5 py-4 text-sm">
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-muted-foreground">Plan</p>
+        <p className="font-medium text-foreground">{business.plan?.name ?? (business.planId ? 'A removed plan' : 'No plan')}</p>
+        <p className="text-xs text-muted-foreground">
+          {max === null ? `${open} branch${open === 1 ? '' : 'es'} open${business.plan ? ' · unlimited' : ' · no limit'}` : `${open} of ${max} branches open`}
+        </p>
+      </div>
+      {canEdit && plans.length > 0 && (
+        <div className="flex items-end gap-2">
+          <Select value={value} onChange={(e) => setPicked(e.target.value)} aria-label="Move to plan" className="w-48">
+            <option value="">No plan (no limit)</option>
+            {plans.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={value === (business.plan?.id ?? '')}
+            loading={change.isPending}
+            onClick={() => change.mutate()}
+          >
+            Change plan
+          </Button>
+        </div>
+      )}
+      {over && (
+        <p className="w-full text-xs text-warning">
+          {target.name} allows {target.maxStores}; this shop has {open} open. They stay open, but it can&apos;t open more.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The shop's first steps; payment methods are listed rather than ticked. */
+const SETUP_STEPS: { key: 'products' | 'stock' | 'staff' | 'sale'; label: string }[] = [
+  { key: 'products', label: 'Added products' },
+  { key: 'stock', label: 'Put stock on the shelf' },
+  { key: 'staff', label: 'Added staff' },
+  { key: 'sale', label: 'Made a first sale' },
+];
+
+/**
+ * How far the shop has got setting up (what its own Dashboard's Getting
+ * started shows), and the tenders it takes at the till -- for a support call
+ * or a shop that signed up and went quiet.
+ */
+function SetupCard({ business }: { business: BusinessDetail }) {
+  const setup = business.setup;
+  const done = setup ? SETUP_STEPS.filter((s) => setup[s.key]).length : 0;
+  const tenders = business.acceptedTenders?.length ? business.acceptedTenders : ['CASH', 'CARD', 'MOBILE'];
+  return (
+    <Card>
+      <CardHeader className="border-b border-border pb-3.5">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-semibold">Setup & Payment Methods</CardTitle>
+          {setup && (
+            <span className="text-xs text-muted-foreground">
+              {done} of {SETUP_STEPS.length} steps
+            </span>
+          )}
+        </div>
+      </CardHeader>
+      <div className="space-y-4 px-5 py-4 text-sm">
+        {setup && (
+          <ul className="space-y-2">
+            {SETUP_STEPS.map((s) => (
+              <li key={s.key} className="flex items-center gap-2">
+                {setup[s.key] ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                ) : (
+                  <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                )}
+                <span className={setup[s.key] ? 'text-foreground' : 'text-muted-foreground'}>{s.label}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div>
+          <p className="mb-1.5 text-xs text-muted-foreground">Takes payment by</p>
+          <div className="flex flex-wrap gap-1.5">
+            {tenders.map((t) => (
+              <Badge key={t} tone={t === 'KHALTI' || t === 'CONNECTIPS' ? 'primary' : 'muted'}>
+                {SALE_TENDER_LABELS[t] ?? t}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -657,7 +782,7 @@ function SalesTab({ id, money }: { id: string; money: (v: number | string) => st
                 <TD className="text-muted-foreground">{s.user?.name ?? '—'}</TD>
                 <TD className="text-right font-medium">{s._count.items}</TD>
                 <TD>
-                  <Badge tone="muted" className="capitalize">{s.paymentMethod.toLowerCase()}</Badge>
+                  <Badge tone="muted">{SALE_TENDER_LABELS[s.paymentMethod] ?? s.paymentMethod}</Badge>
                 </TD>
                 <TD className="text-right font-bold text-foreground">{money(s.total)}</TD>
               </TR>

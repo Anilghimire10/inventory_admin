@@ -16,6 +16,7 @@ import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/table';
 import { Spinner, ErrorState, PageHeader, EmptyState, Alert } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
 import { formatDate } from '@/lib/utils';
+import { AdminSettings } from '@/components/settings/sections';
 
 const ROLE_HELP: Record<AdminRole, string> = {
   ADMIN: 'Full admin: can change anything, including other admins.',
@@ -81,6 +82,8 @@ export default function AdminsPage() {
           )
         }
       />
+
+      <AdminSettings />
 
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />

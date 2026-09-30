@@ -26,6 +26,8 @@ import {
   Settings,
   CalendarClock,
   ClipboardCheck,
+  BadgeCheck,
+  Layers,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { Spinner } from '@/components/ui/misc';
@@ -34,8 +36,9 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { cn } from '@/lib/utils';
 import { AdminApi } from '@/lib/api';
 
-// The sidebar, in sections, as in the shop app: Overview is always open, the
-// rest fold away, and the section holding the current page stays open.
+// The sidebar, in sections, as in the shop app: Overview is always open, and
+// of the rest one is open at a time -- the current page's, until another is
+// picked.
 const NAV_GROUPS = [
   {
     label: 'Overview',
@@ -49,6 +52,8 @@ const NAV_GROUPS = [
     label: 'Shops',
     items: [
       { href: '/businesses', label: 'Businesses', icon: Building2 },
+      { href: '/plans', label: 'Plans & billing', icon: Layers },
+      { href: '/payment-claims', label: 'Payments to confirm', icon: BadgeCheck },
       { href: '/renewals', label: 'Renewals', icon: CalendarClock },
       { href: '/users', label: 'Users', icon: Users },
     ],
@@ -85,7 +90,9 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname() ?? '';
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // The section opened by hand, and on which page. On another page the
+  // current page's section is open again.
+  const [picked, setPicked] = useState<{ label: string | null; at: string } | null>(null);
   // Tickets waiting on us, for the badge on Support: open, and the shop wrote
   // last. Answered ones drop off. Polled, since shops write in.
   const awaitingTickets = useQuery({
@@ -94,6 +101,14 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
     enabled: !!admin,
     refetchInterval: 60_000,
     select: (d) => d.awaitingCount,
+  });
+  // Shops that say they've paid, waiting for an admin to check.
+  const pendingClaims = useQuery({
+    queryKey: ['admin-payment-claims', 'pending-count'],
+    queryFn: () => AdminApi.paymentClaims({ status: 'PENDING', limit: 1 }),
+    enabled: !!admin,
+    refetchInterval: 60_000,
+    select: (d) => d.pendingCount,
   });
 
   useEffect(() => {
@@ -115,14 +130,21 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
 
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname.startsWith(href);
-  // The section holding the current page stays open even if it was folded.
-  const activeLabel = NAV_GROUPS.find((g) => g.items.some((i) => isActive(i.href)))?.label;
+  const activeLabel = NAV_GROUPS.find((g) => g.items.some((i) => isActive(i.href)))?.label ?? null;
+  const openLabel = picked && picked.at === pathname ? picked.label : activeLabel;
 
-  const supportBadge = (count: number | undefined) =>
+  // What's waiting on us, per page: a number on the nav item, and on a
+  // folded section the total for its pages, so nothing hides behind a fold.
+  const waiting: Record<string, { count?: number; what: string }> = {
+    '/support': { count: awaitingTickets.data, what: 'waiting for a reply' },
+    '/payment-claims': { count: pendingClaims.data, what: 'payments to confirm' },
+  };
+  const groupWaiting = (items: { href: string }[]) => items.reduce((n, i) => n + (waiting[i.href]?.count ?? 0), 0);
+  const countBadge = (count: number | undefined, what = 'waiting') =>
     !!count && (
       <span
         className="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal text-primary-foreground"
-        aria-label={`${count} waiting for a reply`}
+        aria-label={`${count} ${what}`}
       >
         {count}
       </span>
@@ -133,11 +155,13 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-border bg-card transition-transform lg:static lg:translate-x-0',
+          // Fixed on a phone (a drawer); on desktop it sticks at full screen
+          // height, so it stays put down a long page and its menu scrolls on its own.
+          'fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 transform flex-col border-r border-border bg-card transition-transform lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex h-16 items-center gap-2 border-b border-border px-5">
+        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <ShieldCheck className="h-4 w-4" />
           </div>
@@ -154,10 +178,10 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
           </button>
         </div>
 
-        <nav className="flex max-h-[calc(100dvh-4rem)] flex-col gap-4 overflow-y-auto p-3">
+        <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
           {NAV_GROUPS.map((group) => {
             const isOverview = group.label === 'Overview';
-            const isCollapsed = !isOverview && group.label !== activeLabel && collapsed[group.label] === true;
+            const isCollapsed = !isOverview && group.label !== openLabel;
             return (
               <div key={group.label} className="flex flex-col gap-1">
                 {isOverview ? (
@@ -166,20 +190,16 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
                   </p>
                 ) : (
                   <button
-                    onClick={() =>
-                      setCollapsed((c) => ({
-                        ...c,
-                        [group.label]: !(c[group.label] === true && group.label !== activeLabel),
-                      }))
-                    }
+                    // Opening one closes the others; clicking the open one closes it.
+                    onClick={() => setPicked({ label: isCollapsed ? group.label : null, at: pathname })}
                     aria-expanded={!isCollapsed}
                     className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
                   >
                     {group.label}
                     {/* Folded away, the Support count moves up here so it isn't hidden. */}
-                    {isCollapsed && group.label === 'Support' && supportBadge(awaitingTickets.data)}
+                    {isCollapsed && countBadge(groupWaiting(group.items))}
                     {isCollapsed ? (
-                      <ChevronRight className={cn('h-4 w-4', !(group.label === 'Support' && awaitingTickets.data) && 'ml-auto')} />
+                      <ChevronRight className={cn('h-4 w-4', !groupWaiting(group.items) && 'ml-auto')} />
                     ) : (
                       <ChevronDown className="ml-auto h-4 w-4" />
                     )}
@@ -201,7 +221,7 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
                       >
                         <item.icon className="h-4 w-4" />
                         {item.label}
-                        {item.href === '/support' && supportBadge(awaitingTickets.data)}
+                        {countBadge(waiting[item.href]?.count, waiting[item.href]?.what)}
                       </Link>
                     ))}
                   </div>

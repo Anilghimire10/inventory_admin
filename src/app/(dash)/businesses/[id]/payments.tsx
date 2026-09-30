@@ -9,8 +9,7 @@ import {
   SUBSCRIPTION_PAYMENT_METHODS,
   type BusinessDetail,
   type RecordPaymentInput,
-  type SubscriptionPaymentMethod,
-} from '@/lib/api';
+  type SubscriptionPaymentMethod, PAYMENT_METHOD_LABELS, pricingCurrency } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogFooter } from '@/components/ui/dialog';
@@ -24,13 +23,12 @@ import { useToast } from '@/components/ui/toast';
 import { formatMoney, formatDate } from '@/lib/utils';
 import { printReceipt } from '@/lib/receipt';
 
-const METHOD_LABELS: Record<SubscriptionPaymentMethod, string> = {
-  CASH: 'Cash',
-  BANK: 'Bank transfer',
-  ESEWA: 'eSewa',
-  KHALTI: 'Khalti',
-  OTHER: 'Other',
-};
+const METHOD_LABELS = PAYMENT_METHOD_LABELS;
+
+/** The plans from Settings, for picking a shop's plan. Shared cache with the Settings page. */
+export function usePlans() {
+  return useQuery({ queryKey: ['admin-settings'], queryFn: () => AdminApi.settings(), select: (s) => s.plans ?? [] });
+}
 
 /**
  * Buttons for the subscription card: record money received (which also
@@ -121,6 +119,26 @@ function RecordPaymentDialog({
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [emailReceipt, setEmailReceipt] = useState(true);
+  const { data: plans = [] } = usePlans();
+  // The plan it pays for: the shop's own to start; the shop moves onto the one picked.
+  const [planId, setPlanId] = useState(business.plan?.id ?? '');
+  const plan = plans.find((p) => p.id === planId);
+
+  // What the shop is charged in: NPR, or USD for a shop outside Nepal where the plan has a dollar price.
+  const shopCurrency = pricingCurrency(business.currency);
+  const currency = shopCurrency === 'USD' && plan?.prices.some((x) => x.amountUsd) ? 'USD' : plan ? 'NPR' : shopCurrency;
+  const planPrice = (p: (typeof plans)[number] | undefined, m: number) => {
+    const x = p?.prices.find((y) => y.months === m);
+    if (!x) return undefined;
+    const inUsd = shopCurrency === 'USD' && p!.prices.some((y) => y.amountUsd);
+    return inUsd ? (x.amountUsd ?? undefined) : x.amount;
+  };
+  // Picking a plan or a length fills in that price, while the amount box is still the plan's.
+  const priceFor = (id: string, m: string) => planPrice(plans.find((p) => p.id === id), Number(m));
+  const repricing = (id: string, m: string) => {
+    const next = priceFor(id, m);
+    if (next !== undefined && (amount === '' || Number(amount) === priceFor(planId, months))) setAmount(String(next));
+  };
 
   const save = useMutation({
     mutationFn: (dto: RecordPaymentInput) => AdminApi.recordPayment(business.id, dto),
@@ -149,10 +167,12 @@ function RecordPaymentDialog({
           e.preventDefault();
           save.mutate({
             amount: Number(amount),
+            currency,
             method,
             reference: reference.trim() || undefined,
             note: note.trim() || undefined,
             emailReceipt,
+            ...(planId ? { planId } : {}),
             ...(periodMode === 'months'
               ? { months: Number(months) }
               : // End of the chosen day, so "paid until the 30th" includes the 30th.
@@ -160,8 +180,26 @@ function RecordPaymentDialog({
           });
         }}
       >
+        {plans.length > 0 && (
+          <Field label="Plan">
+            <Select
+              value={planId}
+              onChange={(e) => {
+                repricing(e.target.value, months);
+                setPlanId(e.target.value);
+              }}
+            >
+              <option value="">No plan (leave as it is)</option>
+              {plans.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.maxStores === null ? 'unlimited branches' : `${p.maxStores} branch${p.maxStores === 1 ? '' : 'es'}`}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <div className="grid grid-cols-2 gap-4">
-          <Field label={`Amount (${business.currency})`}>
+          <Field label={`Amount (${currency})`}>
             <Input
               type="number"
               step="0.01"
@@ -215,9 +253,15 @@ function RecordPaymentDialog({
                 type="button"
                 size="sm"
                 variant={Number(months) === m ? 'primary' : 'outline'}
-                onClick={() => setMonths(String(m))}
+                onClick={() => {
+                  repricing(planId, String(m));
+                  setMonths(String(m));
+                }}
               >
                 +{m} {m === 1 ? 'month' : 'months'}
+                {planPrice(plan, m) !== undefined && (
+                  <span className="ml-1 opacity-70">({formatMoney(planPrice(plan, m)!, currency)})</span>
+                )}
               </Button>
             ))}
           </div>
@@ -265,7 +309,7 @@ function RecordPaymentDialog({
             Cancel
           </Button>
           <Button type="submit" loading={save.isPending} disabled={!valid}>
-            Record {amount ? formatMoney(Number(amount), business.currency) : 'payment'}
+            Record {amount ? formatMoney(Number(amount), currency) : 'payment'}
           </Button>
         </DialogFooter>
       </form>
@@ -352,6 +396,7 @@ export function PaymentsTab({ id }: { id: string }) {
               </TD>
               <TD className="whitespace-nowrap text-muted-foreground">
                 {formatDate(p.periodFrom)} – {formatDate(p.periodTo)}
+                {p.planName && <span className="block text-xs">{p.planName} plan</span>}
               </TD>
               <TD className="text-muted-foreground">
                 {p.reference || '—'}
