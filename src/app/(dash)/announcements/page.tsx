@@ -40,6 +40,10 @@ const toLocalInput = (d: Date) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+/** "a, b and c". */
+const listed = (parts: string[]) =>
+  parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : (parts[0] ?? '');
+
 /**
  * Tell shops something -- maintenance, a new feature, a price change. It
  * lands in each shop's notification bell, and optionally in the owners'
@@ -111,11 +115,15 @@ export default function AnnouncementsPage() {
 
   const recipients = audience === 'selected' ? picked.size : reach.data?.meta.total ?? 0;
   const atDate = new Date(at);
-  const ready =
-    title.trim().length >= 3 &&
-    body.trim().length > 0 &&
-    (when === 'now' || !Number.isNaN(atDate.getTime())) &&
-    (audience === 'selected' ? recipients > 0 : true);
+  // What the form still needs, said next to the button: after a send the form
+  // clears, and a greyed-out button with no reason reads as broken.
+  const missing: string[] = [];
+  if (!title.trim()) missing.push('a title');
+  else if (title.trim().length < 3) missing.push('a longer title (3+ characters)');
+  if (!body.trim()) missing.push('a message');
+  if (audience === 'selected' && recipients === 0) missing.push('at least one business');
+  if (when === 'later' && Number.isNaN(atDate.getTime())) missing.push('a send time');
+  const ready = missing.length === 0;
 
   const cancel = useMutation({
     mutationFn: (id: string) => AdminApi.cancelAnnouncement(id),
@@ -323,8 +331,10 @@ export default function AnnouncementsPage() {
             </label>
 
             <div className="flex flex-wrap items-center justify-end gap-3">
-              {!canEdit && (
+              {!canEdit ? (
                 <span className="text-sm text-muted-foreground">Only a full admin can send announcements.</span>
+              ) : (
+                !ready && <span className="text-sm text-muted-foreground">Add {listed(missing)} to send.</span>
               )}
               <Button type="submit" disabled={!ready || !canEdit} className="gap-1.5">
                 <Megaphone className="h-4 w-4" /> {when === 'later' ? 'Review & schedule' : 'Review & send'}
