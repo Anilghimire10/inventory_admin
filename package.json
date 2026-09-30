@@ -8,7 +8,9 @@
     "start": "next start -p 5174",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run typecheck && npm run lint"
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
@@ -22,6 +24,7 @@
     "tailwind-merge": "^2.5.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.5.5",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
@@ -31,6 +34,7 @@
     "eslint-config-next": "^16.3.6",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.2"
   }
 }

@@ -14,6 +14,12 @@ export function printReceipt(r: SubscriptionReceipt) {
     alert('Please allow pop-ups to print the receipt.');
     return;
   }
+  w.document.write(receiptHtml(r));
+  w.document.close();
+}
+
+/** The receipt as a complete HTML page, every typed-in value escaped. */
+export function receiptHtml(r: SubscriptionReceipt): string {
   const seller = [
     r.seller.name && `<div style="font-size:18px;font-weight:700">${esc(r.seller.name)}</div>`,
     r.seller.address && `<div>${esc(r.seller.address)}</div>`,
@@ -31,7 +37,7 @@ export function printReceipt(r: SubscriptionReceipt) {
     maximumFractionDigits: 2,
   })}`;
 
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"/>
+  return `<!doctype html><html><head><meta charset="utf-8"/>
 <title>Receipt ${esc(r.receiptNo)}</title>
 <style>
   @page { size: A4; margin: 18mm; }
@@ -62,6 +68,5 @@ export function printReceipt(r: SubscriptionReceipt) {
   </table>
   <p style="margin-top:40px;color:#94a3b8;font-size:12px">Thank you for your payment.</p>
   <script>window.onload = () => { window.print(); }</script>
-</body></html>`);
-  w.document.close();
+</body></html>`;
 }
