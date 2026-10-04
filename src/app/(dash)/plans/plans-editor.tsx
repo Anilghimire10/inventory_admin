@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input, Textarea } from '@/components/ui/input';
 import { Field } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
+import { cn, formatMoney } from '@/lib/utils';
 
 type Length = (typeof PLAN_LENGTHS)[number];
 
@@ -106,7 +106,8 @@ export function cleanPlans(drafts: PlanDraft[]): { plans: SubscriptionPlan[]; er
   return { plans, error };
 }
 
-const money = (currency: string, n: number) => `${currency} ${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+// The same format the shop app shows owners (formatMoney there too).
+const money = (currency: string, n: number) => formatMoney(n, currency);
 const branches = (max: number | null) =>
   max === null ? 'Unlimited branches' : max === 1 ? '1 branch' : `Up to ${max} branches`;
 
@@ -199,9 +200,9 @@ export function PlansEditor({
                   {sold.length ? (
                     sold.map((m) => (
                       <span key={m}>
-                        <span className="font-semibold">NPR {Number(d.prices[m]).toLocaleString('en-IN')}</span>{' '}
+                        <span className="font-semibold">{money('NPR', Number(d.prices[m]))}</span>{' '}
                         <span className="text-muted-foreground">/ {planLengthLabel(m)}</span>
-                        {d.pricesUsd[m].trim() && <span className="text-muted-foreground"> (USD {d.pricesUsd[m]})</span>}
+                        {d.pricesUsd[m].trim() && <span className="text-muted-foreground"> ({money('USD', Number(d.pricesUsd[m]))})</span>}
                       </span>
                     ))
                   ) : (

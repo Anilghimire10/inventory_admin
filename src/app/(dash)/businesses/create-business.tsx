@@ -9,8 +9,7 @@ import {
   SALES_MODELS,
   type BusinessType,
   type CreateBusinessInput,
-  type SalesModel,
-} from '@/lib/api';
+  type SalesModel, BUSINESS_TYPE_LABEL, SALES_MODEL_LABEL } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogFooter } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/label';
@@ -102,7 +101,7 @@ export function CreateBusinessDialog({ onClose }: { onClose: () => void }) {
             <Select value={form.type} onChange={(e) => set('type', e.target.value as BusinessType)}>
               {BUSINESS_TYPES.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {BUSINESS_TYPE_LABEL[t]}
                 </option>
               ))}
             </Select>
@@ -111,7 +110,7 @@ export function CreateBusinessDialog({ onClose }: { onClose: () => void }) {
             <Select value={form.salesModel} onChange={(e) => set('salesModel', e.target.value as SalesModel)}>
               {SALES_MODELS.map((m) => (
                 <option key={m} value={m}>
-                  {m}
+                  {SALES_MODEL_LABEL[m]}
                 </option>
               ))}
             </Select>

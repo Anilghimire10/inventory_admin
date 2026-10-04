@@ -22,7 +22,7 @@ test('record a payment, print its receipt, see the shop in Renewals', async ({ p
   await page.getByRole('button', { name: /^Record/ }).last().click();
   await expect(page.getByText(/SUB-\d{6} recorded/)).toBeVisible();
 
-  await page.getByRole('button', { name: 'payments', exact: true }).click();
+  await page.getByRole('tab', { name: 'Payments', exact: true }).click();
   const printButton = page.getByRole('button', { name: /^Print SUB-/ }).first();
   const [receipt] = await Promise.all([page.waitForEvent('popup'), printButton.click()]);
   await receipt.waitForLoadState();

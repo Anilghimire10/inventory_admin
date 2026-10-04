@@ -35,6 +35,7 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { useTheme } from '@/theme/ThemeProvider';
 import { cn } from '@/lib/utils';
 import { AdminApi } from '@/lib/api';
+import { useAdminLive } from '@/lib/live';
 
 // The sidebar, in sections, as in the shop app: Overview is always open, and
 // of the rest one is open at a time -- the current page's, until another is
@@ -110,6 +111,9 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
     refetchInterval: 60_000,
     select: (d) => d.pendingCount,
   });
+
+  // New tickets, replies and payment reports arrive as they happen.
+  useAdminLive(!!admin);
 
   useEffect(() => {
     if (!loading && !admin) router.replace('/login');

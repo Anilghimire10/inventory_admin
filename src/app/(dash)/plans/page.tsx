@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { OwnerPreview, PlansEditor, cleanPlans, toDrafts, type PlanDraft } from './plans-editor';
 import { OnlinePaymentsStatus, PayByHandSettings, ReceiptSettings } from '@/components/settings/sections';
+import { Tabs as TabBar } from '@/components/ui/tabs';
 
 /**
  * Plans & billing: what shops pay for, how they can pay, and what their
@@ -75,26 +76,21 @@ function Tabs({ s }: { s: PlatformSettings }) {
   const panel = (id: TabId) => cn('space-y-6', tab !== id && 'hidden');
   return (
     <div>
-      <nav role="tablist" aria-label="Plans and billing" className="mb-6 flex flex-wrap gap-1 border-b border-border">
-        {TABS.map((t) => (
-          <a
-            key={t.id}
-            href={`#${t.id}`}
-            role="tab"
-            aria-selected={tab === t.id}
-            className={cn(
-              '-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
-              tab === t.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
-            )}
-          >
-            <t.icon className="h-4 w-4" />
-            {t.label}
-            {needs[t.id] && <span className="h-2 w-2 rounded-full bg-warning" aria-label="needs attention" />}
-          </a>
-        ))}
-      </nav>
+      <TabBar
+        className="mb-6"
+        label="Plans and billing"
+        items={TABS.map((t) => ({
+          id: t.id,
+          label: t.label,
+          icon: t.icon,
+          extra: needs[t.id] ? <span className="h-2 w-2 rounded-full bg-warning" aria-label="needs attention" /> : null,
+        }))}
+        value={tab}
+        // The tab lives in the #hash (see above), so set that and let it follow.
+        onChange={(id) => {
+          window.location.hash = id;
+        }}
+      />
 
       <div role="tabpanel" className={panel('overview')}>
         <SetupChecklist s={s} />

@@ -99,6 +99,17 @@ export type BusinessType = (typeof BUSINESS_TYPES)[number];
 export const SALES_MODELS = ['RETAIL', 'WHOLESALE'] as const;
 export type SalesModel = (typeof SALES_MODELS)[number];
 
+/** The words the shop app uses for these (sign-up, Settings), not the stored codes. */
+export const BUSINESS_TYPE_LABEL: Record<BusinessType, string> = {
+  GROCERY: 'Grocery',
+  PHARMACY: 'Pharmacy',
+  RETAIL: 'Retail',
+  OTHER: 'Other',
+};
+export const SALES_MODEL_LABEL: Record<SalesModel, string> = { RETAIL: 'Retailer', WHOLESALE: 'Wholesaler' };
+export const businessTypeLabel = (t: string | null | undefined) => (t ? (BUSINESS_TYPE_LABEL[t as BusinessType] ?? t) : '—');
+export const salesModelLabel = (m: string | null | undefined) => (m ? (SALES_MODEL_LABEL[m as SalesModel] ?? m) : '—');
+
 export const SUBSCRIPTION_FILTERS = [
   'active', 'trial', 'expiring', 'expired', 'inactive', 'no-expiry',
 ] as const;
@@ -593,6 +604,8 @@ export interface PlatformSettings {
   envTrialDays: number;
   signupOpen: boolean;
   maintenanceMessage: string | null;
+  /** On: the shop app is closed; every shop request gets 503 MAINTENANCE. */
+  maintenanceMode: boolean;
   /** Null keeps shop activity logs forever. */
   auditRetentionDays: number | null;
   /** Admins without two-factor can only reach their Account page. */
@@ -699,6 +712,7 @@ export type UpdateSettingsInput = Partial<
     | 'trialDays'
     | 'signupOpen'
     | 'maintenanceMessage'
+    | 'maintenanceMode'
     | 'auditRetentionDays'
     | 'requireAdminTwoFactor'
     | 'subscriptionPrice'

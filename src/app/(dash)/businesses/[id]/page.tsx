@@ -13,8 +13,7 @@ import {
   type BusinessDetail,
   type BusinessType,
   type SalesModel,
-  type UpdateBusinessInput,
-} from '@/lib/api';
+  type UpdateBusinessInput, BUSINESS_TYPE_LABEL, SALES_MODEL_LABEL, businessTypeLabel, salesModelLabel } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +26,7 @@ import { Select } from '@/components/ui/select';
 import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
 import { Spinner, ErrorState, Alert, EmptyState } from '@/components/ui/misc';
-import { formatMoney, formatDate, formatDateTime, formatRelative, cn } from '@/lib/utils';
+import { formatMoney, formatDate, formatDateTime, formatRelative } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
 import { useCanEdit } from '@/auth/AuthProvider';
 import { PaymentsTab, SubscriptionActions, usePlans } from './payments';
@@ -35,6 +34,7 @@ import { NotesTab } from './notes';
 import { SupportTab } from './support';
 import { ProductsTab, PurchasesTab, ShiftsTab } from './more-tabs';
 import { DataControls } from './data-controls';
+import { Tabs } from '@/components/ui/tabs';
 
 type Tab =
   | 'overview'
@@ -132,7 +132,7 @@ export default function BusinessDetailPage() {
             <SubscriptionBadge status={data.subscriptionStatus} />
           </div>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            <span className="capitalize">{data.type}</span> · <span className="capitalize">{data.salesModel}</span> · {data.currency}
+            {businessTypeLabel(data.type)} · {salesModelLabel(data.salesModel)} · {data.currency}
             {data.taxId ? ` · PAN ${data.taxId}` : ''} · Joined {formatDate(data.createdAt)} · Last active{' '}
             {data.lastActiveAt ? formatRelative(data.lastActiveAt).toLowerCase() : 'never'}
           </p>
@@ -191,23 +191,14 @@ export default function BusinessDetailPage() {
         <MiniCard label="Registered Customers" value={String(data._count.customers)} icon={Users} />
       </div>
 
-      {/* Tabs navigation */}
-      <div className="flex gap-2 overflow-x-auto border-b border-border">
-        {(['overview', 'payments', 'customers', 'sales', 'products', 'purchases', 'shifts', 'activity', 'notes', 'support'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              'pb-3 px-3 text-sm font-medium capitalize transition-colors border-b-2 -mb-px',
-              tab === t
-                ? 'border-primary text-primary font-semibold'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        label="Business details"
+        items={(['overview', 'payments', 'customers', 'sales', 'products', 'purchases', 'shifts', 'activity', 'notes', 'support'] as Tab[]).map(
+          (t) => ({ id: t, label: t[0].toUpperCase() + t.slice(1) }),
+        )}
+        value={tab}
+        onChange={setTab}
+      />
 
       {/* Tab contents */}
       <div>
@@ -641,7 +632,7 @@ function EditBusinessModal({
             <Select value={form.type} onChange={(e) => set('type', e.target.value as BusinessType)}>
               {BUSINESS_TYPES.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {BUSINESS_TYPE_LABEL[t]}
                 </option>
               ))}
             </Select>
@@ -654,7 +645,7 @@ function EditBusinessModal({
             >
               {SALES_MODELS.map((m) => (
                 <option key={m} value={m}>
-                  {m}
+                  {SALES_MODEL_LABEL[m]}
                 </option>
               ))}
             </Select>

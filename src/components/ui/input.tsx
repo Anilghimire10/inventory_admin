@@ -8,7 +8,9 @@ export const Input = forwardRef<
   <input
     ref={ref}
     className={cn(
-      'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm',
+      // No vertical padding: a single-line control centres its own text, so a
+      // shorter h-* from a caller still fits it (see select.tsx).
+      'flex h-10 w-full rounded-md border border-input bg-background px-3 py-0 text-base sm:text-sm',
       'placeholder:text-muted-foreground',
       'focus-visible:outline-2 focus-visible:outline-ring outline-offset-0',
       'disabled:cursor-not-allowed disabled:opacity-50',

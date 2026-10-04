@@ -21,6 +21,7 @@ import { Pagination } from '@/components/ui/pagination';
 import { Spinner, ErrorState, PageHeader, EmptyState, Alert } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
 import { cn, formatDate, formatDateTime, formatMoney } from '@/lib/utils';
+import { Tabs } from '@/components/ui/tabs';
 
 const TABS: { status: PaymentClaimStatus; label: string }[] = [
   { status: 'PENDING', label: 'Waiting' },
@@ -64,24 +65,23 @@ export default function PaymentClaimsPage() {
       />
       {!canEdit && <Alert className="mb-4">Support accounts can see these, but only full admins can confirm or reject them.</Alert>}
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        {TABS.map((t) => (
-          <Button
-            key={t.status}
-            size="sm"
-            variant={status === t.status ? 'primary' : 'outline'}
-            onClick={() => {
-              setStatus(t.status);
-              setPage(1);
-            }}
-          >
-            {t.label}
-            {t.status === 'PENDING' && !!data?.pendingCount && (
-              <span className="ml-1 rounded-full bg-background/20 px-1.5 text-[11px]">{data.pendingCount}</span>
-            )}
-          </Button>
-        ))}
-      </div>
+      <Tabs
+        className="mb-4"
+        label="Payment reports"
+        items={TABS.map((t) => ({
+          id: t.status,
+          label: t.label,
+          extra:
+            t.status === 'PENDING' && !!data?.pendingCount ? (
+              <span className="rounded-full bg-primary/10 px-1.5 text-[11px] text-primary">{data.pendingCount}</span>
+            ) : null,
+        }))}
+        value={status}
+        onChange={(s) => {
+          setStatus(s);
+          setPage(1);
+        }}
+      />
 
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />

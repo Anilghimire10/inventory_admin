@@ -29,9 +29,9 @@ export default function SettingsPage() {
     {
       href: '/announcements',
       icon: Megaphone,
-      title: 'Maintenance banner',
+      title: 'Maintenance mode and banner',
       where: 'Announcements',
-      now: s && (s.maintenanceMessage ? 'Showing' : 'Off'),
+      now: s && (s.maintenanceMode ? 'App closed' : s.maintenanceMessage ? 'Banner showing' : 'Off'),
     },
     {
       href: '/activity',

@@ -19,6 +19,7 @@ import { Field } from '@/components/ui/label';
 import { Input, Textarea } from '@/components/ui/input';
 import { Alert, Spinner } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { formatDateTime } from '@/lib/utils';
 
 /*
@@ -189,47 +190,110 @@ function SignupForm({ settings }: { settings: PlatformSettings }) {
   );
 }
 
-// ---- Announcements: the maintenance banner ----
+// ---- Announcements: maintenance mode and the maintenance banner ----
 
 export function MaintenanceBannerSettings() {
   return (
     <SettingsPanel
-      title="Maintenance banner"
-      summary={(s) => (s.maintenanceMessage ? `Showing: “${s.maintenanceMessage}”` : 'Off. No banner in the shop app.')}
+      title="Maintenance"
+      summary={(s) =>
+        [
+          s.maintenanceMode ? 'Shop app CLOSED for maintenance' : 'Shop app open',
+          s.maintenanceMessage ? `banner: “${s.maintenanceMessage}”` : 'no banner',
+        ].join(' · ')
+      }
     >
-      {(s) => <BannerForm settings={s} />}
+      {(s) => <MaintenanceForm settings={s} />}
     </SettingsPanel>
   );
 }
 
-function BannerForm({ settings }: { settings: PlatformSettings }) {
+function MaintenanceForm({ settings }: { settings: PlatformSettings }) {
   const canEdit = useCanEdit();
   const save = useSaveSettings();
   const [banner, setBanner] = useState(settings.maintenanceMessage ?? '');
+  const [closing, setClosing] = useState(false);
   const next = banner.trim() || null;
+  const on = settings.maintenanceMode;
   return (
-    <div>
-      <p className="mb-3 text-sm text-muted-foreground">
-        Shown across the top of the shop app, including its sign-in page, until you clear it. Unlike an announcement it
-        can&apos;t be dismissed.
-      </p>
-      <Field label="Message">
-        <Textarea
-          rows={3}
-          maxLength={500}
-          placeholder="e.g. The app will be down 22:00–22:15 tonight for an update."
-          value={banner}
-          disabled={!canEdit}
-          onChange={(e) => setBanner(e.target.value)}
+    <div className="space-y-6">
+      <section>
+        <h3 className="text-sm font-semibold text-foreground">Maintenance mode</h3>
+        <div
+          className={`mt-2 rounded-md border p-3 text-sm ${on ? 'border-destructive/40 bg-destructive/10' : 'border-border bg-muted/40'}`}
+        >
+          <p className="font-medium text-foreground">
+            {on ? 'On: the shop app is closed.' : 'Off: the shop app is open.'}
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            {on
+              ? 'Shops see a “Down for maintenance” screen and can’t sign in or save anything. This panel keeps working, and so does “view as owner”. Ending it opens the app again within a minute.'
+              : 'Turning it on closes the shop app for everyone: no signing in, no sales, nothing saved, until you end it. Use it while you update the server or the database.'}
+          </p>
+          {canEdit && (
+            <div className="mt-3">
+              {on ? (
+                <Button size="sm" loading={save.isPending} onClick={() => save.mutate({ maintenanceMode: false })}>
+                  End maintenance
+                </Button>
+              ) : (
+                <Button size="sm" variant="destructive" onClick={() => setClosing(true)}>
+                  Turn on maintenance mode
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <h3 className="text-sm font-semibold text-foreground">Banner</h3>
+        <p className="mb-3 mt-1 text-sm text-muted-foreground">
+          Shown across the top of the shop app, including its sign-in page, until you remove it. Unlike an announcement it
+          can&apos;t be dismissed. While maintenance mode is on it&apos;s the message on the maintenance screen, so say when
+          you&apos;ll be back.
+        </p>
+        <Field label="Message">
+          <Textarea
+            rows={3}
+            maxLength={500}
+            placeholder="e.g. The app will be down 22:00–22:15 tonight for an update."
+            value={banner}
+            disabled={!canEdit}
+            onChange={(e) => setBanner(e.target.value)}
+          />
+        </Field>
+        <p className="mt-1 text-xs text-muted-foreground">Empty means no banner. Shops see a change within a minute.</p>
+        <SaveRow
+          dirty={next !== settings.maintenanceMessage}
+          pending={save.isPending}
+          onSave={() => save.mutate({ maintenanceMessage: next })}
+          settings={settings}
         />
-      </Field>
-      <p className="mt-1 text-xs text-muted-foreground">Empty means no banner. Shops see a change within a minute.</p>
-      <SaveRow
-        dirty={next !== settings.maintenanceMessage}
-        pending={save.isPending}
-        onSave={() => save.mutate({ maintenanceMessage: next })}
-        settings={settings}
-      />
+        {canEdit && settings.maintenanceMessage && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2"
+            disabled={save.isPending}
+            onClick={() => save.mutate({ maintenanceMessage: null })}
+          >
+            Remove banner
+          </Button>
+        )}
+      </section>
+
+      {closing && (
+        <ConfirmDialog
+          open
+          title="Close the shop app for maintenance?"
+          description="Every shop is stopped within a minute: open tabs switch to the maintenance screen, and no one can sign in or save anything until you end it here."
+          confirmLabel="Turn on"
+          loading={save.isPending}
+          onConfirm={() => save.mutate({ maintenanceMode: true }, { onSettled: () => setClosing(false) })}
+          onCancel={() => setClosing(false)}
+        />
+      )}
     </div>
   );
 }

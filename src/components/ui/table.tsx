@@ -5,7 +5,7 @@ export function Table({
   ...props
 }: React.HTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="w-full overflow-x-auto rounded-lg border border-border bg-card">
+    <div className="relative w-full overflow-x-auto rounded-lg border border-border bg-card">
       <table className={cn('w-full text-sm', className)} {...props} />
     </div>
   );
@@ -23,7 +23,7 @@ export function TH({
   className,
   ...props
 }: React.ThHTMLAttributes<HTMLTableCellElement>) {
-  return <th className={cn('px-4 py-3 font-medium', className)} {...props} />;
+  return <th className={cn('px-3 py-3 font-medium sm:px-4', className)} {...props} />;
 }
 
 export function TBody({ children }: { children: React.ReactNode }) {
@@ -43,5 +43,5 @@ export function TD({
   className,
   ...props
 }: React.TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn('px-4 py-3 align-middle', className)} {...props} />;
+  return <td className={cn('px-3 py-3 align-middle sm:px-4', className)} {...props} />;
 }

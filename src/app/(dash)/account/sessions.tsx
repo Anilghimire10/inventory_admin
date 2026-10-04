@@ -90,6 +90,8 @@ export function SessionsCard() {
                   variant="ghost"
                   loading={end.isPending && end.variables === s.id}
                   onClick={() => end.mutate(s.id)}
+                  // Every row says "Sign out"; the name says which session it ends.
+                  aria-label={`Sign out ${s.device}, signed in ${formatDateTime(s.createdAt)}`}
                 >
                   Sign out
                 </Button>

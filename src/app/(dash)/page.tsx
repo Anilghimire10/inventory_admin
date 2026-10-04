@@ -14,7 +14,7 @@ import {
   ArrowUpRight,
   TrendingUp,
 } from 'lucide-react';
-import { AdminApi } from '@/lib/api';
+import { AdminApi, businessTypeLabel } from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Spinner, ErrorState, PageHeader } from '@/components/ui/misc';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -194,7 +194,7 @@ export default function OverviewPage() {
                 >
                   <div>
                     <div className="font-medium text-foreground">{b.name}</div>
-                    <div className="text-xs text-muted-foreground capitalize">{b.type}</div>
+                    <div className="text-xs text-muted-foreground">{businessTypeLabel(b.type)}</div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground">{formatDate(b.createdAt)}</span>

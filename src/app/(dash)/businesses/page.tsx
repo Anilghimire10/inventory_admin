@@ -10,8 +10,7 @@ import {
   SUBSCRIPTION_FILTERS,
   type BusinessSort,
   type BusinessType,
-  type SubscriptionFilter,
-} from '@/lib/api';
+  type SubscriptionFilter, BUSINESS_TYPE_LABEL, businessTypeLabel } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -184,7 +183,7 @@ function BusinessesList() {
             <option value="">Any type</option>
             {BUSINESS_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {BUSINESS_TYPE_LABEL[t]}
               </option>
             ))}
           </Select>
@@ -246,7 +245,7 @@ function BusinessesList() {
                   onClick={() => router.push(`/businesses/${b.id}`)}
                 >
                   <TD className="font-semibold text-foreground">{b.name}</TD>
-                  <TD className="text-muted-foreground capitalize">{b.type}</TD>
+                  <TD className="text-muted-foreground">{businessTypeLabel(b.type)}</TD>
                   <TD className="text-right font-medium">{b._count.users}</TD>
                   <TD className="text-right font-medium">{b._count.products}</TD>
                   <TD className="text-right font-medium">{b._count.sales}</TD>

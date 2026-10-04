@@ -14,6 +14,7 @@ import { Spinner, ErrorState, PageHeader, EmptyState, Alert } from '@/components
 import { useToast } from '@/components/ui/toast';
 import { formatDateTime, cn } from '@/lib/utils';
 import { MaintenanceBannerSettings } from '@/components/settings/sections';
+import { Tooltip } from '@/components/ui/tooltip';
 
 /** Audiences by subscription status. "selected" is picking shops by hand. */
 const AUDIENCES: { value: AnnouncementAudience; label: string; hint: string }[] = [
@@ -196,21 +197,21 @@ export default function AnnouncementsPage() {
               <legend className="mb-2 text-sm font-medium">Send to</legend>
               <div className="flex flex-wrap gap-2">
                 {AUDIENCES.map((a) => (
-                  <button
-                    key={a.value}
-                    type="button"
-                    title={a.hint}
-                    aria-pressed={audience === a.value}
-                    onClick={() => setAudience(a.value)}
-                    className={cn(
-                      'rounded-md border px-3 py-1.5 text-sm transition-colors',
-                      audience === a.value
-                        ? 'border-primary bg-primary/10 font-medium text-primary'
-                        : 'border-border text-muted-foreground hover:bg-accent',
-                    )}
-                  >
-                    {a.label}
-                  </button>
+                  <Tooltip key={a.value} content={a.hint}>
+                    <button
+                      type="button"
+                      aria-pressed={audience === a.value}
+                      onClick={() => setAudience(a.value)}
+                      className={cn(
+                        'rounded-md border px-3 py-1.5 text-sm transition-colors',
+                        audience === a.value
+                          ? 'border-primary bg-primary/10 font-medium text-primary'
+                          : 'border-border text-muted-foreground hover:bg-accent',
+                      )}
+                    >
+                      {a.label}
+                    </button>
+                  </Tooltip>
                 ))}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">

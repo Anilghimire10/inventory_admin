@@ -22,6 +22,7 @@ import { Spinner, ErrorState, Alert, EmptyState } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
 import { formatMoney, formatDate } from '@/lib/utils';
 import { printReceipt } from '@/lib/receipt';
+import { Tooltip } from '@/components/ui/tooltip';
 
 const METHOD_LABELS = PAYMENT_METHOD_LABELS;
 
@@ -67,18 +68,19 @@ export function SubscriptionActions({
         <Button size="sm" className="gap-1.5" onClick={() => setRecording(true)}>
           <Wallet className="h-3.5 w-3.5" /> Record payment
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="gap-1.5"
-          loading={remind.isPending}
-          // Nothing to remind about without an end date; the API says the same.
-          disabled={!business.subscribedTo}
-          title={business.subscribedTo ? undefined : 'This business has no end date'}
-          onClick={() => remind.mutate()}
-        >
-          <BellRing className="h-3.5 w-3.5" /> Send reminder now
-        </Button>
+        <Tooltip content={business.subscribedTo ? undefined : 'This business has no end date'}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            loading={remind.isPending}
+            // Nothing to remind about without an end date; the API says the same.
+            disabled={!business.subscribedTo}
+            onClick={() => remind.mutate()}
+          >
+            <BellRing className="h-3.5 w-3.5" /> Send reminder now
+          </Button>
+        </Tooltip>
       </div>
 
       {recording && (
@@ -404,26 +406,28 @@ export function PaymentsTab({ id }: { id: string }) {
               </TD>
               <TD className="text-muted-foreground">{p.recordedByAdmin?.name ?? '—'}</TD>
               <TD className="whitespace-nowrap text-right">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`Print ${receiptLabel(p.receiptNo)}`}
-                  title="Print receipt"
-                  loading={busy === `print:${p.id}`}
-                  onClick={() => print(p.id)}
-                >
-                  <Printer className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`Email ${receiptLabel(p.receiptNo)} to the owner`}
-                  title="Email receipt to the owner"
-                  loading={busy === `email:${p.id}`}
-                  onClick={() => email(p.id)}
-                >
-                  <Mail className="h-3.5 w-3.5" />
-                </Button>
+                <Tooltip content="Print receipt">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Print ${receiptLabel(p.receiptNo)}`}
+                    loading={busy === `print:${p.id}`}
+                    onClick={() => print(p.id)}
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                  </Button>
+                </Tooltip>
+                <Tooltip content="Email receipt to the owner">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Email ${receiptLabel(p.receiptNo)} to the owner`}
+                    loading={busy === `email:${p.id}`}
+                    onClick={() => email(p.id)}
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                  </Button>
+                </Tooltip>
               </TD>
             </TR>
           ))}
